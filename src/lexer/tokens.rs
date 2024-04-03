@@ -36,26 +36,6 @@ pub enum Token<'a> {
     // Types
     #[token("auto")]
     Auto,
-
-    // Ints
-    #[token("short")]
-    Short,
-    #[token("int")]
-    Int,
-    #[token("long")]
-    Long,
-
-    // Floats
-    #[token("float")]
-    Float,
-    #[token("double")]
-    Double,
-
-    // Other types
-    #[token("char")]
-    Char,
-    #[token("void")]
-    Void,
     
     // Variable/function properties
     #[token("const")]

@@ -1,11 +1,11 @@
+pub mod tokens;
+
 use std::{io, path::PathBuf};
 
 use clutils::files::FileHandler;
 use logos::Logos;
 
 use self::tokens::Token;
-
-pub mod tokens;
 
 pub struct Lexer {
     pub file: FileHandler,
