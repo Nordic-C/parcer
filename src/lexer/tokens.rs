@@ -1,6 +1,6 @@
 use logos::Logos;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Logos)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Logos)]
 #[logos(skip r#"(?:\/\/[^\n]*|\t|\s|\f)*"#)]
 pub enum Token<'a> {
     // Preprocessor directives
@@ -48,6 +48,8 @@ pub enum Token<'a> {
     Volatile,
     #[token("restrict")]
     Restrict,
+    #[token("inline")]
+    Inline,
 
     // Number specifier
     #[token("signed")]

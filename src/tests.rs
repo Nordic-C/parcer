@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use std::io;
+    use clutils::files::FileHandler;
 
     use crate::lexer::Lexer;
 
     #[test]
-    fn test_lexer() -> io::Result<()> {
-        let lexer = Lexer::new("tests/main.c".into())?;
-        let tokens = lexer.tokenize();
-        println!("{tokens:?}");
-        Ok(())
+    fn test_lexer() {
+        let fh = FileHandler::new("tests/main.c".into()).unwrap();
+        let lexer = Lexer::new(&fh);
+        println!("{:?}", lexer.tokens)
     }
 }

@@ -1,4 +1,4 @@
-
+pub type Ident = String;
 pub type Type = String;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -29,7 +29,7 @@ pub enum Statement {
 
     Block(BlockStmt),
     
-    Call(CallExpr),
+    Expression(Expression),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -58,31 +58,31 @@ pub enum Expression {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct StructStmt {
-    pub name: Option<String>,
+    pub name: Option<Ident>,
     pub fields: Vec<Field>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
-    pub name: String,
+    pub name: Ident,
     pub _type: Type,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct EnumStmt {
-    pub name: Option<String>,
+    pub name: Option<Ident>,
     pub variants: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnionStmt {
-    pub name: Option<String>,
+    pub name: Option<Ident>,
     pub fields: Vec<Field>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunctionStmt {
-    pub name: String,
+    pub name: Ident,
     pub args: Vec<Field>,
     pub ret_type: Type,
     pub body: BlockStmt,
@@ -90,7 +90,7 @@ pub struct FunctionStmt {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariableStmt {
-    pub name: String,
+    pub name: Ident,
     pub _type: Type,
     pub val: Expression,
 }
@@ -120,4 +120,103 @@ pub struct SwitchStmt {
 pub struct CaseStmt {
     pub comp_val: Expression,
     pub block: BlockStmt,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct WhileStmt {
+    pub cond: Expression,
+    pub block: BlockStmt,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct DoWhileStmt {
+    pub cond: Expression,
+    pub block: BlockStmt,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ForStmt {
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TypedefStmt {
+    pub name: Ident,
+    pub _type: Box<Statement>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ReturnStmt {
+    pub val: Expression,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BreakStmt {
+    pub label: Option<Ident>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ContinueStmt {
+    pub label: Option<Ident>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct GotoStmt {
+    pub label: Option<Ident>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BlockStmt {
+    pub block: Vec<Statement>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CallExpr {
+    pub name: Ident,
+    pub args: Vec<Expression>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BinOpExpr {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
+    pub operator: BinOperator,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct UnOpExpr {
+    pub left: Box<Expression>,
+    pub operator: UnOperator,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CompoundAssignmentExpr {
+    pub ident: Ident,
+    pub val: Box<Expression>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct AssignmentExpr {
+    pub ident: Ident,
+    pub val: Box<Expression>,
+    pub operator: BinOperator,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum BinOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    LSh,
+    RSh,
+    BAnd,
+    BOr,
+    BXor,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum UnOperator {
+    Incr,
+    Decr,
 }
