@@ -83,6 +83,9 @@ pub struct UnionStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunctionStmt {
     pub name: Ident,
+    pub is_volatile: bool,
+    pub is_static: bool,
+    pub is_inline: bool,
     pub args: Vec<Field>,
     pub ret_type: Type,
     pub body: BlockStmt,
@@ -91,6 +94,10 @@ pub struct FunctionStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct VariableStmt {
     pub name: Ident,
+    pub is_volatile: bool,
+    pub is_const: bool,
+    pub is_static: bool,
+    pub is_register: bool,
     pub _type: Type,
     pub val: Expression,
 }
