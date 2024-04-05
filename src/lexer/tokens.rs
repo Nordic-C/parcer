@@ -3,34 +3,6 @@ use logos::Logos;
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Logos)]
 #[logos(skip r#"(?:\/\/[^\n]*|\t|\s|\f)*"#)]
 pub enum Token<'a> {
-    // Preprocessor directives
-    #[token("#define")]
-    Define,
-    #[token("#undefine")]
-    Undef,
-    #[token("#ifdef")]
-    IfDef,
-    #[token("#ifndef")]
-    IfnDef,
-    #[token("#elseif")]
-    ElseIf,
-    /// Else preprocessor directive
-    #[token("#else")]
-    ElseDir,
-    #[token("#endif")]
-    EndIf,
-
-    #[token("#include")]
-    Include,
-    #[token("#pragme")]
-    Pragma,
-    #[token("#error")]
-    Error,
-    #[token("#line")]
-    Line,
-    #[token("#warning")]
-    Warning,
-
     // Keywords
 
     // Types
@@ -215,6 +187,10 @@ pub enum Token<'a> {
     Ampersand,
     #[token("*")]
     Asterisk,
+    #[token("?")]
+    QuestionMark,
+    #[token(":")]
+    Colon,
 
     // Brackets
     #[token("[")]

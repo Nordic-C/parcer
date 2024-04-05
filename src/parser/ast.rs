@@ -1,40 +1,48 @@
-pub type Ident = String;
-pub type Type = String;
+pub type Ident<'a> = &'a str;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Statement {
-    // Data types
-    Struct(StructStmt),
-    Enum(EnumStmt),
-    Union(UnionStmt),
-
-    Function(FunctionStmt),
-    Variable(VariableStmt),
-
-    // Control flow
-    If(IfStmt),
-    Switch(SwitchStmt),
-
-    // Loops
-    While(WhileStmt),
-    DoWhile(DoWhileStmt),
-    For(ForStmt),
-
-    Typedef(TypedefStmt),
-
-    Return(ReturnStmt),
-    Break(BreakStmt),
-    Continue(ContinueStmt),
-    Goto(GotoStmt),
-
-    Block(BlockStmt),
-    
-    Expression(Expression),
+pub enum Type<'a> {
+    Struct(StructStmt<'a>),
+    Enum(EnumStmt<'a>),
+    Union(UnionStmt<'a>),
+    Auto,
+    Ident(&'a str)
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Expression {
-    LiteralString(String),
+pub enum Statement<'a> {
+    // Data types
+    Struct(StructStmt<'a>),
+    Enum(EnumStmt<'a>),
+    Union(UnionStmt<'a>),
+
+    Function(FunctionStmt<'a>),
+    Variable(VariableStmt<'a>),
+
+    // Control flow
+    If(IfStmt<'a>),
+    Switch(SwitchStmt<'a>),
+
+    // Loops
+    While(WhileStmt<'a>),
+    DoWhile(DoWhileStmt<'a>),
+    For(ForStmt),
+
+    Typedef(TypedefStmt<'a>),
+
+    Return(ReturnStmt<'a>),
+    Break(BreakStmt<'a>),
+    Continue(ContinueStmt<'a>),
+    Goto(GotoStmt<'a>),
+
+    Block(BlockStmt<'a>),
+    
+    Expression(Expression<'a>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Expression<'a> {
+    LiteralString(&'a str),
     LiteralChar(char),
 
     LiteralShort(i16),
@@ -43,63 +51,67 @@ pub enum Expression {
     LiteralFloat(f32),
     LiteralDouble(f64),
 
-    Pointer(Box<Expression>),
+    Ident(Ident<'a>),
 
-    Sizeof(Box<Expression>),
+    Pointer(&'a Expression<'a>),
+    Deref(&'a Expression<'a>),
+    AddrOf(&'a Expression<'a>),
+
+    Sizeof(&'a Expression<'a>),
     
-    Call(CallExpr),
-    BinaryOperation(BinOpExpr),
-    UnaryOperation(UnOpExpr),
+    Call(CallExpr<'a>),
+    BinaryOperation(BinOpExpr<'a>),
+    UnaryOperation(UnOpExpr<'a>),
 
     // Assignment
-    CompoundAssignment(CompoundAssignmentExpr),
-    Assignment(AssignmentExpr),
+    CompoundAssignment(CompoundAssignmentExpr<'a>),
+    Assignment(AssignmentExpr<'a>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct StructStmt {
-    pub name: Option<Ident>,
-    pub fields: Vec<Field>,
+pub struct StructStmt<'a> {
+    pub name: Option<Ident<'a>>,
+    pub fields: Vec<Field<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Field {
-    pub name: Ident,
-    pub _type: Type,
+pub struct Field<'a> {
+    pub name: Ident<'a>,
+    pub _type: Type<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct EnumStmt {
-    pub name: Option<Ident>,
-    pub variants: Vec<String>,
+pub struct EnumStmt<'a> {
+    pub name: Option<Ident<'a>>,
+    pub variants: Vec<Ident<'static>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct UnionStmt {
-    pub name: Option<Ident>,
-    pub fields: Vec<Field>,
+pub struct UnionStmt<'a> {
+    pub name: Option<Ident<'a>>,
+    pub fields: Vec<Field<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct FunctionStmt {
-    pub name: Ident,
+pub struct FunctionStmt<'a> {
+    pub name: Ident<'a>,
     pub is_volatile: bool,
     pub is_static: bool,
     pub is_inline: bool,
-    pub args: Vec<Field>,
-    pub ret_type: Type,
-    pub body: Option<BlockStmt>,
+    pub args: Vec<Field<'a>>,
+    pub ret_type: Type<'a>,
+    pub body: Option<BlockStmt<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct VariableStmt {
-    pub name: Ident,
+pub struct VariableStmt<'a> {
+    pub name: Ident<'a>,
     pub is_volatile: bool,
     pub is_const: bool,
     pub is_static: bool,
     pub is_register: bool,
-    pub _type: Type,
-    pub val: Option<Expression>,
+    pub _type: Type<'a>,
+    pub val: Option<Expression<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -110,35 +122,35 @@ pub enum IfType {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct IfStmt {
+pub struct IfStmt<'a> {
     pub if_type: IfType,
-    pub cond: Option<Expression>,
-    pub block: BlockStmt,
-    pub alt: Option<Box<IfStmt>>,
+    pub cond: Option<Expression<'a>>,
+    pub block: BlockStmt<'a>,
+    pub alt: Option<&'a IfStmt<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct SwitchStmt {
-    pub comp_val: Expression,
-    pub cases: Vec<CaseStmt>,
+pub struct SwitchStmt<'a> {
+    pub comp_val: Expression<'a>,
+    pub cases: Vec<CaseStmt<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CaseStmt {
-    pub comp_val: Expression,
-    pub block: BlockStmt,
+pub struct CaseStmt<'a> {
+    pub comp_val: Expression<'a>,
+    pub block: BlockStmt<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WhileStmt {
-    pub cond: Expression,
-    pub block: BlockStmt,
+pub struct WhileStmt<'a> {
+    pub cond: Expression<'a>,
+    pub block: BlockStmt<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct DoWhileStmt {
-    pub cond: Expression,
-    pub block: BlockStmt,
+pub struct DoWhileStmt<'a> {
+    pub cond: Expression<'a>,
+    pub block: BlockStmt<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -146,65 +158,65 @@ pub struct ForStmt {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct TypedefStmt {
-    pub name: Ident,
-    pub _type: Box<Statement>,
+pub struct TypedefStmt<'a> {
+    pub name: Ident<'a>,
+    pub _type: &'a Statement<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ReturnStmt {
-    pub val: Expression,
+pub struct ReturnStmt<'a> {
+    pub val: Expression<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct BreakStmt {
-    pub label: Option<Ident>,
+pub struct BreakStmt<'a> {
+    pub label: Option<Ident<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ContinueStmt {
-    pub label: Option<Ident>,
+pub struct ContinueStmt<'a> {
+    pub label: Option<Ident<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct GotoStmt {
-    pub label: Option<Ident>,
+pub struct GotoStmt<'a> {
+    pub label: Option<Ident<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct BlockStmt {
-    pub block: Vec<Statement>,
+pub struct BlockStmt<'a> {
+    pub block: Vec<Statement<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CallExpr {
-    pub name: Ident,
-    pub args: Vec<Expression>,
+pub struct CallExpr<'a> {
+    pub name: Ident<'a>,
+    pub args: Vec<Expression<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct BinOpExpr {
-    pub left: Box<Expression>,
-    pub right: Box<Expression>,
+pub struct BinOpExpr<'a> {
+    pub left: &'a Expression<'a>,
+    pub right: &'a Expression<'a>,
     pub operator: BinOperator,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct UnOpExpr {
-    pub left: Box<Expression>,
+pub struct UnOpExpr<'a> {
+    pub left: &'a Expression<'a>,
     pub operator: UnOperator,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CompoundAssignmentExpr {
-    pub ident: Ident,
-    pub val: Box<Expression>,
+pub struct CompoundAssignmentExpr<'a> {
+    pub ident: Ident<'a>,
+    pub val: &'a Expression<'a>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct AssignmentExpr {
-    pub ident: Ident,
-    pub val: Box<Expression>,
+pub struct AssignmentExpr<'a> {
+    pub ident: Ident<'a>,
+    pub val: &'a Expression<'a>,
     pub operator: BinOperator,
 }
 

@@ -1,32 +1,36 @@
 #![macro_use]
 
-use crate::lexer::{tokens::Token, Lexer};
+use crate::{
+    expect_peek,
+    lexer::{tokens::Token, Lexer},
+    parser::ast::Type,
+};
 
 use self::ast::{BlockStmt, Expression, FunctionStmt, Statement, VariableStmt};
 
 use core::option::Option;
 
 pub mod ast;
+mod util;
 
-#[macro_export]
-macro_rules! expect_peek {
-    ($tok:expr,$pat:pat,$fail:expr) => {{
-        if !matches!($tok, $pat) {
-            $fail($tok);
-            false
-        } else {
-            true
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! parser_error {
-    ($($arg:tt)+) => {{
-        use colored::Colorize;
-
-        eprintln!("{}: {}", "Parser Error".red(), format_args!($($arg)+))
-    }};
+#[repr(u8)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+enum Precedence {
+    Comma,
+    Assign,
+    Conditional,
+    Or,
+    And,
+    BOr,
+    BXor,
+    BAnd,
+    Equals,
+    Relational,
+    Shift,
+    Add,
+    Mul,
+    UnaryOp,
+    PostOp,
 }
 
 pub struct Parser<'a> {
@@ -42,11 +46,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Vec<Statement> {
+    pub fn parse(&mut self) -> Vec<Statement<'a>> {
         todo!()
     }
 
-    pub fn parse_stmt(&mut self) -> Statement {
+    pub fn parse_stmt(&mut self) -> Statement<'a> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::Auto | Token::Const | Token::Signed | Token::Unsigned | Token::Register => {
@@ -69,17 +73,42 @@ impl<'a> Parser<'a> {
                 Token::Switch => todo!(),
                 Token::Extern => todo!(),
                 Token::Typedef => todo!(),
+                Token::Ident(_) => match self.peek_tok() {
+                    Some(Token::Ident(_)) => self.parse_var_or_func(),
+                    _ => Statement::Expression(self.parse_expression()),
+                },
                 tok => todo!("{:?}", tok),
             },
             None => todo!(),
         }
     }
 
-    fn parse_expression(&mut self) -> Expression {
-        todo!()
+    fn parse_expression(&mut self) -> Expression<'a> {
+        match self.cur_tok() {
+            Some(tok) => match tok {
+                Token::Sizeof => todo!(),
+                Token::LitString(str) => {
+                    let string = str.trim_matches('"');
+                    Expression::LiteralString(string)
+                }
+                Token::LitInt(int) => Expression::LiteralInt(int.parse().unwrap()),
+                Token::LitFloat(float) => Expression::LiteralFloat(float.parse().unwrap()),
+                Token::LitChar(char) => Expression::LiteralChar(char.chars().nth(1).unwrap()),
+                Token::Ident(ident) => Expression::Ident(ident),
+                Token::ExclamMark => todo!(),
+                Token::Increment => todo!(),
+                Token::Decrement => todo!(),
+                Token::Ampersand => todo!(),
+                Token::Asterisk => todo!(),
+                Token::LCurly => todo!(),
+                Token::LParent => todo!(),
+                tok => todo!("{:?}", tok),
+            },
+            None => todo!(),
+        }
     }
 
-    fn parse_var_or_func(&mut self) -> Statement {
+    fn parse_var_or_func(&mut self) -> Statement<'a> {
         let mut index = self.tok_index;
         loop {
             match self.lexer.tokens.get(index) {
@@ -94,7 +123,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function(&mut self) -> FunctionStmt {
+    fn parse_function(&mut self) -> FunctionStmt<'a> {
         let mut is_volatile = false;
         let mut is_static = false;
         let mut is_inline = false;
@@ -127,18 +156,20 @@ impl<'a> Parser<'a> {
         self.next_tok();
         dbg!(self.cur_tok());
         let block = self.parse_block();
-        FunctionStmt {
-            name: ident.to_string(),
+        let func = FunctionStmt {
+            name: ident,
             is_volatile,
             is_static,
             is_inline,
             args: Vec::new(),
-            ret_type: _type.into(),
+            ret_type: Type::Ident(_type.into()),
             body: Some(block),
-        }
+        };
+        dbg!(&func);
+        func
     }
 
-    fn parse_variable(&mut self) -> VariableStmt {
+    fn parse_variable(&mut self) -> VariableStmt<'a> {
         let mut is_const = false;
         let mut is_volatile = false;
         let mut is_static = false;
@@ -174,7 +205,7 @@ impl<'a> Parser<'a> {
             }) {
                 let var = VariableStmt {
                     name: ident.into(),
-                    _type: _type.to_string(),
+                    _type: Type::Ident(_type),
                     val: None,
                     is_const,
                     is_static,
@@ -189,25 +220,27 @@ impl<'a> Parser<'a> {
         self.next_tok();
         self.next_tok();
 
-        let val = Expression::LiteralString("eee".into());
+        let val = self.parse_expression();
 
         expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| ());
         self.next_tok();
         self.next_tok();
 
-        VariableStmt {
+        let var = VariableStmt {
             name: ident.into(),
             val: Some(val),
-            _type: _type.into(),
+            _type: Type::Ident(_type.into()),
             is_const,
             is_static,
             is_volatile,
             is_register,
-        }
+        };
+        dbg!(&var);
+        var
     }
 
     /// First tok needs to be Token::LCurly
-    fn parse_block(&mut self) -> BlockStmt {
+    fn parse_block(&mut self) -> BlockStmt<'a> {
         let mut block = Vec::new();
         self.next_tok();
         while self.peek_tok() != Some(&Token::RCurly) {
