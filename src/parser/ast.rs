@@ -88,7 +88,7 @@ pub struct FunctionStmt {
     pub is_inline: bool,
     pub args: Vec<Field>,
     pub ret_type: Type,
-    pub body: BlockStmt,
+    pub body: Option<BlockStmt>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -99,7 +99,7 @@ pub struct VariableStmt {
     pub is_static: bool,
     pub is_register: bool,
     pub _type: Type,
-    pub val: Expression,
+    pub val: Option<Expression>,
 }
 
 #[derive(Debug, PartialEq, Clone)]

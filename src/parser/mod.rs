@@ -2,16 +2,30 @@
 
 use crate::lexer::{tokens::Token, Lexer};
 
-use self::ast::{Expression, FunctionStmt, Statement, VariableStmt};
+use self::ast::{BlockStmt, Expression, FunctionStmt, Statement, VariableStmt};
+
+use core::option::Option;
 
 pub mod ast;
 
 #[macro_export]
 macro_rules! expect_peek {
-    ($tok:expr,$pat:pat) => {{
+    ($tok:expr,$pat:pat,$fail:expr) => {{
         if !matches!($tok, $pat) {
-            panic!("Expected: {:?} to equal {:?}", $tok, stringify!($pat))
+            $fail($tok);
+            false
+        } else {
+            true
         }
+    }};
+}
+
+#[macro_export]
+macro_rules! parser_error {
+    ($($arg:tt)+) => {{
+        use colored::Colorize;
+
+        eprintln!("{}: {}", "Parser Error".red(), format_args!($($arg)+))
     }};
 }
 
@@ -55,7 +69,7 @@ impl<'a> Parser<'a> {
                 Token::Switch => todo!(),
                 Token::Extern => todo!(),
                 Token::Typedef => todo!(),
-                _ => Statement::Expression(self.parse_expression()),
+                tok => todo!("{:?}", tok),
             },
             None => todo!(),
         }
@@ -70,7 +84,9 @@ impl<'a> Parser<'a> {
         loop {
             match self.lexer.tokens.get(index) {
                 Some(Token::LParent) => return Statement::Function(self.parse_function()),
-                Some(Token::Assign) => return Statement::Variable(self.parse_variable()),
+                Some(Token::Assign) | Some(Token::Semicolon) => {
+                    return Statement::Variable(self.parse_variable())
+                }
                 None => panic!("Eof"),
                 _ => (),
             }
@@ -96,7 +112,6 @@ impl<'a> Parser<'a> {
                             break (_type.unwrap(), *ident);
                         }
                     }
-                    Some(Token::Auto) => _type = Some("auto"),
                     Some(Token::Inline) => is_inline = true,
                     Some(Token::Static) => is_static = true,
                     Some(Token::Volatile) => is_volatile = true,
@@ -107,7 +122,20 @@ impl<'a> Parser<'a> {
             }
         };
         dbg!(is_volatile, is_static, is_inline, ident, _type);
-        todo!()
+        self.next_tok();
+        self.next_tok();
+        self.next_tok();
+        dbg!(self.cur_tok());
+        let block = self.parse_block();
+        FunctionStmt {
+            name: ident.to_string(),
+            is_volatile,
+            is_static,
+            is_inline,
+            args: Vec::new(),
+            ret_type: _type.into(),
+            body: Some(block),
+        }
     }
 
     fn parse_variable(&mut self) -> VariableStmt {
@@ -140,22 +168,52 @@ impl<'a> Parser<'a> {
                 self.next_tok()
             }
         };
-        expect_peek!(self.peek_tok(), Some(Token::Assign));
+        if !expect_peek!(self.peek_tok().copied(), Some(Token::Assign), |_| ()) {
+            if expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| {
+                panic!("EEEEE")
+            }) {
+                let var = VariableStmt {
+                    name: ident.into(),
+                    _type: _type.to_string(),
+                    val: None,
+                    is_const,
+                    is_static,
+                    is_register,
+                    is_volatile,
+                };
+                dbg!(&var);
+                return var;
+            }
+        };
         // Skip Token::Assign
         self.next_tok();
         self.next_tok();
 
-        let val = self.parse_expression();
+        let val = Expression::LiteralString("eee".into());
+
+        expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| ());
+        self.next_tok();
+        self.next_tok();
 
         VariableStmt {
             name: ident.into(),
-            val,
+            val: Some(val),
             _type: _type.into(),
             is_const,
             is_static,
             is_volatile,
             is_register,
         }
+    }
+
+    /// First tok needs to be Token::LCurly
+    fn parse_block(&mut self) -> BlockStmt {
+        let mut block = Vec::new();
+        self.next_tok();
+        while self.peek_tok() != Some(&Token::RCurly) {
+            block.push(self.parse_stmt());
+        }
+        BlockStmt { block }
     }
 
     fn cur_tok(&self) -> Option<&Token<'a>> {
