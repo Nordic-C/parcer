@@ -6,7 +6,9 @@ use crate::{
     parser::ast::Type,
 };
 
-use self::ast::{BlockStmt, Expression, FunctionStmt, Statement, VariableStmt};
+use self::ast::{
+    BinOpExpr, BinOperator, BlockStmt, Expression, FunctionStmt, Statement, VariableStmt,
+};
 
 use core::option::Option;
 
@@ -16,6 +18,7 @@ mod util;
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 enum Precedence {
+    Lowest,
     Comma,
     Assign,
     Conditional,
@@ -30,7 +33,8 @@ enum Precedence {
     Add,
     Mul,
     UnaryOp,
-    PostOp,
+    Prefix,
+    Postfix,
 }
 
 pub struct Parser<'a> {
@@ -75,7 +79,7 @@ impl<'a> Parser<'a> {
                 Token::Typedef => todo!(),
                 Token::Ident(_) => match self.peek_tok() {
                     Some(Token::Ident(_)) => self.parse_var_or_func(),
-                    _ => Statement::Expression(self.parse_expression()),
+                    _ => Statement::Expression(self.parse_expression(Precedence::Lowest)),
                 },
                 tok => todo!("{:?}", tok),
             },
@@ -83,7 +87,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expression(&mut self) -> Expression<'a> {
+    fn parse_expression(&mut self, prec: Precedence) -> Expression<'a> {
+        let prefix = self.parse_prefix();
+
+        let mut left_expr = prefix;
+
+        // peek tok as prec
+        loop {
+            if prec < Self::tok_to_prec(self.peek_tok().unwrap()) {
+                self.next_tok();
+                left_expr = self.parse_infix(left_expr);
+            } else {
+                break;
+            }
+        }
+
+        left_expr
+    }
+
+    fn parse_infix(&mut self, left: Expression<'a>) -> Expression<'a> {
+        match self.cur_tok() {
+            Some(tok) => match tok {
+                Token::Equals | Token::Plus | Token::Minus | Token::Asterisk | Token::Divide => {
+                    self.parse_infix_expr(left)
+                }
+                //Token::LParent => Expression::Call(self.parse_call_expr(left)),
+                // Token::LSquare => self.parse_index_expr(left),
+                _ => panic!("Invalid for parsing an infix expr: {:#?}", left),
+            },
+            _ => todo!(),
+        }
+    }
+
+    fn parse_prefix(&mut self) -> Expression<'a> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::Sizeof => todo!(),
@@ -106,6 +142,18 @@ impl<'a> Parser<'a> {
             },
             None => todo!(),
         }
+    }
+
+    fn parse_infix_expr(&mut self, left: Expression<'a>) -> Expression<'a> {
+        let op = Self::tok_to_bin_op(self.cur_tok().unwrap());
+        let prec = Self::tok_to_prec(self.cur_tok().unwrap());
+        self.next_tok();
+        let right: Expression<'a> = self.parse_expression(prec);
+        Expression::BinaryOperation(BinOpExpr {
+            left: &left,
+            right: &right,
+            operator: op,
+        })
     }
 
     fn parse_var_or_func(&mut self) -> Statement<'a> {
@@ -220,7 +268,7 @@ impl<'a> Parser<'a> {
         self.next_tok();
         self.next_tok();
 
-        let val = self.parse_expression();
+        let val = self.parse_expression(Precedence::Lowest);
 
         expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| ());
         self.next_tok();
@@ -247,6 +295,32 @@ impl<'a> Parser<'a> {
             block.push(self.parse_stmt());
         }
         BlockStmt { block }
+    }
+
+    fn tok_to_bin_op(tok: &Token<'a>) -> BinOperator {
+        match tok {
+            Token::Plus => BinOperator::Add,
+            Token::Minus => BinOperator::Sub,
+            Token::Asterisk => BinOperator::Mul,
+            Token::Divide => BinOperator::Div,
+            Token::Mod => BinOperator::Mod,
+            Token::LeftShift => BinOperator::LSh,
+            Token::RightShift => BinOperator::RSh,
+            Token::Ampersand => BinOperator::BAnd,
+            Token::BOr => BinOperator::BOr,
+            Token::XOr => BinOperator::BXor,
+            _ => todo!()
+        }
+    }
+
+    fn tok_to_prec(tok: &Token<'a>) -> Precedence {
+        match tok {
+            Token::Comma => Precedence::Comma,
+            Token::Assign => Precedence::Assign,
+            Token::And => Precedence::And,
+            Token::Or => Precedence::Or,
+            _ => todo!()
+        }
     }
 
     fn cur_tok(&self) -> Option<&Token<'a>> {

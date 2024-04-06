@@ -53,7 +53,6 @@ pub enum Expression<'a> {
 
     Ident(Ident<'a>),
 
-    Pointer(&'a Expression<'a>),
     Deref(&'a Expression<'a>),
     AddrOf(&'a Expression<'a>),
 

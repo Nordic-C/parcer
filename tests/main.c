@@ -1,3 +1,7 @@
 int main() {
-    char x = "amongus";
+    int const x = 100;
+}
+
+void static lol() {
+    
 }
