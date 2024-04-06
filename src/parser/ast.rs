@@ -195,8 +195,8 @@ pub struct CallExpr<'a> {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BinOpExpr<'a> {
-    pub left: &'a Expression<'a>,
-    pub right: &'a Expression<'a>,
+    pub left: Box<Expression<'a>>,
+    pub right: Box<Expression<'a>>,
     pub operator: BinOperator,
 }
 

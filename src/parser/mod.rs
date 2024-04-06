@@ -93,13 +93,10 @@ impl<'a> Parser<'a> {
         let mut left_expr = prefix;
 
         // peek tok as prec
-        loop {
-            if prec < Self::tok_to_prec(self.peek_tok().unwrap()) {
-                self.next_tok();
-                left_expr = self.parse_infix(left_expr);
-            } else {
-                break;
-            }
+        while !self.peek_is_end() && prec < Self::tok_to_prec(self.peek_tok().unwrap()) {
+            self.next_tok();
+            // Unwrap here might not be safe. Observe this
+            left_expr = self.parse_infix(left_expr);
         }
 
         left_expr
@@ -150,8 +147,8 @@ impl<'a> Parser<'a> {
         self.next_tok();
         let right: Expression<'a> = self.parse_expression(prec);
         Expression::BinaryOperation(BinOpExpr {
-            left: &left,
-            right: &right,
+            left: Box::new(left),
+            right: Box::new(right),
             operator: op,
         })
     }
@@ -319,19 +316,29 @@ impl<'a> Parser<'a> {
             Token::Assign => Precedence::Assign,
             Token::And => Precedence::And,
             Token::Or => Precedence::Or,
-            _ => todo!()
+            Token::Plus | Token::Minus => Precedence::Add,
+            Token::Asterisk | Token::Divide => Precedence::Mul,
+            tok => todo!("precedence for: {tok:?}")
         }
     }
 
+    #[inline(always)]
     fn cur_tok(&self) -> Option<&Token<'a>> {
         self.lexer.tokens.get(self.tok_index)
     }
 
+    #[inline(always)]
     fn peek_tok(&self) -> Option<&Token<'a>> {
         self.lexer.tokens.get(self.tok_index + 1)
     }
 
+    #[inline(always)]
     fn next_tok(&mut self) {
         self.tok_index += 1;
+    }
+
+    #[inline(always)]
+    fn peek_is_end(&self) -> bool {
+        matches!(self.peek_tok(), Some(Token::Semicolon) | None)
     }
 }
