@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use bumpalo::Bump;
     use clutils::files::FileHandler;
 
     use crate::{lexer::Lexer, parser::Parser};
@@ -15,7 +16,8 @@ mod tests {
     fn test_parser() {
         let fh = FileHandler::new("tests/main.c".into()).unwrap();
         let lexer = Lexer::new(&fh);
-        let mut parser = Parser::new(lexer);
+        let parse_arena = Bump::new();
+        let mut parser = Parser::new(lexer, &parse_arena);
         parser.parse_stmt();
     }
 }

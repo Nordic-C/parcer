@@ -95,9 +95,9 @@ pub enum Token<'a> {
     #[token("=")]
     Assign,
     #[token("+=")]
-    AssignPlus,
+    AssignAdd,
     #[token("-=")]
-    AssignMinus,
+    AssignSub,
     #[token("*=")]
     AssignMul,
     #[token("/=")]

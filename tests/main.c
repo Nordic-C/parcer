@@ -1,1 +1,3 @@
-int x = 10 + 100 * 600;
+static int main() {
+    auto x = 100;
+}
