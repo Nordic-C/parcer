@@ -4,6 +4,7 @@ use crate::{
     expect_peek,
     lexer::{tokens::Token, Lexer},
     parser::ast::Type,
+    valid_var_or_func,
 };
 
 use self::ast::{
@@ -41,6 +42,7 @@ enum Precedence {
 pub struct Parser<'a> {
     pub lexer: Lexer<'a>,
     pub variables: HashSet<Ident<'a>>,
+    pub types: HashSet<Ident<'a>>,
     arena: &'a Bump,
     tok_index: usize,
 }
@@ -51,6 +53,7 @@ impl<'a> Parser<'a> {
             lexer,
             tok_index: 0,
             variables: HashSet::new(),
+            types: HashSet::new(),
             arena,
         }
     }
@@ -82,10 +85,58 @@ impl<'a> Parser<'a> {
                 Token::Switch => todo!(),
                 Token::Extern => todo!(),
                 Token::Typedef => todo!(),
-                Token::Ident(ident) => todo!(), //self.determine_ident(ident)
+                Token::Ident(ident) => {dbg!(ident); self.determine_ident()},
                 tok => todo!("{:?}", tok),
             },
             None => todo!(),
+        }
+    }
+
+    fn determine_ident(&mut self) -> Statement<'a> {
+        let mut index = self.tok_index;
+        loop {
+            match self.lexer.tokens.get(index) {
+                Some(Token::LParent) => return Statement::Function(self.parse_function()),
+                Some(Token::Assign) | Some(Token::Semicolon) => {
+                    return Statement::Variable(self.parse_variable())
+                }
+                Some(Token::Ident(ident)) => {
+                    let is_expr = self.variables.contains(ident);
+                    match self.lexer.tokens.get(index + 1) {
+                        // Pointer or multiplication
+                        Some(Token::Asterisk) => match self.lexer.tokens.get(index + 2) {
+                            Some(Token::Ident(id)) => {
+                                if is_expr {
+                                    return Statement::Expression(
+                                        self.parse_expression(Precedence::Lowest),
+                                    );
+                                } else {
+                                    println!("ID: {}", id);
+                                    return self.parse_var_or_func();
+                                }
+                            }
+                            valid_var_or_func!() => return self.parse_var_or_func(),
+                            _ => {
+                                return Statement::Expression(
+                                    self.parse_expression(Precedence::Lowest),
+                                )
+                            }
+                        },
+                        Some(Token::Ident(id)) => {
+                            dbg!(id);
+                            dbg!(self.peek_tok());
+                            return self.parse_var_or_func();
+                        }
+                        valid_var_or_func!() => return self.parse_var_or_func(),
+                        _ => {
+                            return Statement::Expression(self.parse_expression(Precedence::Lowest))
+                        }
+                    }
+                }
+                None => panic!("Eof"),
+                _ => (),
+            }
+            index += 1;
         }
     }
 
@@ -209,11 +260,9 @@ impl<'a> Parser<'a> {
                 self.next_tok()
             }
         };
-        dbg!(is_volatile, is_static, is_inline, ident, _type);
         self.next_tok();
         self.next_tok();
         self.next_tok();
-        dbg!(self.cur_tok());
         let block = self.parse_block();
         let func = FunctionStmt {
             name: ident,
@@ -303,7 +352,6 @@ impl<'a> Parser<'a> {
             is_volatile,
             is_register,
         };
-        dbg!(&var);
         var
     }
 

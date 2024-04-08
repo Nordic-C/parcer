@@ -18,3 +18,14 @@ macro_rules! parser_error {
         eprintln!("{}: {}", "Parser Error".red(), format_args!($($arg)+))
     }};
 }
+
+#[macro_export]
+macro_rules! valid_var_or_func {
+    () => {
+        Some(Token::Const)
+            | Some(Token::Static)
+            | Some(Token::Register)
+            | Some(Token::Inline)
+            | Some(Token::Volatile)
+    };
+}

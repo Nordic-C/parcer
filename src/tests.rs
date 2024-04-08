@@ -18,6 +18,7 @@ mod tests {
         let lexer = Lexer::new(&fh);
         let parse_arena = Bump::new();
         let mut parser = Parser::new(lexer, &parse_arena);
-        parser.parse_stmt();
+        let stmt = parser.parse_stmt();
+        dbg!(stmt);
     }
 }
