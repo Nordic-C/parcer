@@ -39,16 +39,19 @@ enum Precedence {
     Postfix,
 }
 
-pub struct Parser<'a> {
-    pub lexer: Lexer<'a>,
+pub struct Parser<'a, 's> {
+    pub lexer: Lexer<'s>,
     pub variables: HashSet<Ident<'a>>,
     pub types: HashSet<Ident<'a>>,
     arena: &'a Bump,
     tok_index: usize,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, arena: &'a Bump) -> Self {
+impl<'a, 's> Parser<'a, 's>
+where
+    's: 'a,
+{
+    pub fn new(lexer: Lexer<'s>, arena: &'a Bump) -> Self {
         Self {
             lexer,
             tok_index: 0,
@@ -62,14 +65,14 @@ impl<'a> Parser<'a> {
         todo!()
     }
 
-    pub fn parse_stmt(&mut self) -> Statement<'a> {
+    pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::Auto | Token::Const | Token::Signed | Token::Unsigned | Token::Register => {
-                    Statement::Variable(self.parse_variable())
+                    Some(Statement::Variable(self.parse_variable()))
                 }
-                Token::Inline => Statement::Function(self.parse_function()),
-                Token::Static | Token::Volatile => self.parse_var_or_func(),
+                Token::Inline => Some(Statement::Function(self.parse_function())),
+                Token::Static | Token::Volatile => Some(self.parse_var_or_func()),
                 Token::Break => todo!(),
                 Token::Continue => todo!(),
                 Token::Goto => todo!(),
@@ -85,8 +88,14 @@ impl<'a> Parser<'a> {
                 Token::Switch => todo!(),
                 Token::Extern => todo!(),
                 Token::Typedef => todo!(),
-                Token::Ident(ident) => {dbg!(ident); self.determine_ident()},
-                tok => todo!("{:?}", tok),
+                Token::Ident(ident) => {
+                    dbg!(ident);
+                    Some(self.determine_ident())
+                }
+                tok => {
+                    dbg!(tok);
+                    None
+                }
             },
             None => todo!(),
         }
@@ -339,8 +348,7 @@ impl<'a> Parser<'a> {
 
         expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| ());
         self.next_tok();
-        self.next_tok();
-
+        
         self.variables.insert(ident);
 
         let var = VariableStmt {
@@ -359,9 +367,18 @@ impl<'a> Parser<'a> {
     fn parse_block(&mut self) -> BlockStmt<'a> {
         let mut block = Vec::new();
         self.next_tok();
-        while self.peek_tok() != Some(&Token::RCurly) {
-            block.push(self.parse_stmt());
+        while self.cur_tok() != Some(&Token::RCurly) {
+            if self.cur_tok() == Some(&Token::Eol) {
+                self.next_tok();
+                continue;
+            }
+            block.push(match self.parse_stmt() {
+                Some(stmt) => stmt,
+                None => break,
+            });
+            self.next_tok();
         }
+
         BlockStmt { block }
     }
 
@@ -466,5 +483,11 @@ impl<'a> Parser<'a> {
     #[inline(always)]
     fn reset_variables(&mut self) {
         self.variables.clear();
+    }
+
+    fn skip_newline(&mut self) {
+        while let Some(Token::Eol) = self.cur_tok() {
+            self.next_tok()
+        }
     }
 }
