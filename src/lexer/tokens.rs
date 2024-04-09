@@ -8,7 +8,7 @@ pub enum Token<'a> {
     // Types
     #[token("auto")]
     Auto,
-    
+
     // Variable/function properties
     #[token("const")]
     Const,
@@ -38,7 +38,7 @@ pub enum Token<'a> {
     Goto,
     #[token("return")]
     Return,
-    
+
     // Data structures
     #[token("enum")]
     Enum,

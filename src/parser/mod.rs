@@ -13,7 +13,7 @@ use self::ast::{
 };
 
 use core::option::Option;
-use std::{collections::HashSet, ops::Index};
+use std::collections::HashSet;
 
 pub mod ast;
 mod util;
@@ -54,10 +54,7 @@ pub struct Parser<'a, 's> {
     tok_index: usize,
 }
 
-impl<'a, 's> Parser<'a, 's>
-where
-    's: 'a,
-{
+impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn new(lexer: Lexer<'s>, arena: &'a Bump) -> Self {
         Self {
             lexer,
@@ -341,7 +338,7 @@ where
 
         self.variables.insert(ident);
 
-        let var = VariableStmt {
+        VariableStmt {
             name: ident,
             val: Some(val),
             _type: _type,
@@ -349,8 +346,7 @@ where
             is_static,
             is_volatile,
             is_register,
-        };
-        var
+        }
     }
 
     fn parse_loop_interrupter(&mut self, int: LoopInt) -> Statement<'a> {
@@ -374,7 +370,10 @@ where
             Some(Token::Semicolon) => {
                 self.next_tok();
                 self.next_tok();
-                match int { LoopInt::Break=> Statement::Break(BreakStmt { label: None })}
+                match int {
+                    LoopInt::Break => Statement::Break(BreakStmt { label: None }),
+                    LoopInt::Continue => Statement::Continue(ContinueStmt { label: None })
+                }
             }
             Some(tok) => panic!("Unexpected token after control flow interrupter. Expected Semicolon or label, received {tok:?} instead"),
             None => panic!(),

@@ -37,7 +37,7 @@ pub enum Statement<'ast> {
     Goto(GotoStmt<'ast>),
 
     Block(BlockStmt<'ast>),
-    
+
     Expression(Expression<'ast>),
 }
 
@@ -58,7 +58,7 @@ pub enum Expression<'ast> {
     AddrOf(&'ast Expression<'ast>),
 
     Sizeof(&'ast Expression<'ast>),
-    
+
     Call(CallExpr<'ast>),
     BinaryOperation(BinOpExpr<'ast>),
     UnaryOperation(UnOpExpr<'ast>),
@@ -162,8 +162,7 @@ pub struct DoWhileStmt<'ast> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ForStmt {
-}
+pub struct ForStmt {}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypedefStmt<'ast> {
