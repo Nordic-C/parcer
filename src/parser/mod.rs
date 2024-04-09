@@ -1,19 +1,19 @@
 use bumpalo::Bump;
 
 use crate::{
-    expect_peek,
+    expect_tok,
     lexer::{tokens::Token, Lexer},
-    parser::ast::Type,
+    parser::ast::{ContinueStmt, Type},
     valid_var_or_func,
 };
 
 use self::ast::{
-    BinOpExpr, BinOperator, BlockStmt, Expression, FunctionStmt, Ident, PreOperator, PrefixExpr,
-    Statement, VariableStmt,
+    BinOpExpr, BinOperator, BlockStmt, BreakStmt, Expression, FunctionStmt, Ident, PreOperator,
+    PrefixExpr, Statement, VariableStmt,
 };
 
 use core::option::Option;
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Index};
 
 pub mod ast;
 mod util;
@@ -37,6 +37,13 @@ enum Precedence {
     Mul,
     Prefix,
     Postfix,
+}
+
+/// Loop interrupters
+#[derive(Debug)]
+enum LoopInt {
+    Break,
+    Continue,
 }
 
 pub struct Parser<'a, 's> {
@@ -65,16 +72,17 @@ where
         todo!()
     }
 
-    pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
+    // NOTE: Statements should always set cur tok to the next token
+    pub fn parse_stmt(&mut self) -> Statement<'a> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::Auto | Token::Const | Token::Signed | Token::Unsigned | Token::Register => {
-                    Some(Statement::Variable(self.parse_variable()))
+                    Statement::Variable(self.parse_variable())
                 }
-                Token::Inline => Some(Statement::Function(self.parse_function())),
-                Token::Static | Token::Volatile => Some(self.parse_var_or_func()),
-                Token::Break => todo!(),
-                Token::Continue => todo!(),
+                Token::Inline => Statement::Function(self.parse_function()),
+                Token::Static | Token::Volatile => self.parse_var_or_func(),
+                Token::Break => self.parse_loop_interrupter(LoopInt::Break),
+                Token::Continue => self.parse_loop_interrupter(LoopInt::Continue),
                 Token::Goto => todo!(),
                 Token::Return => todo!(),
                 Token::Enum => todo!(),
@@ -88,69 +96,48 @@ where
                 Token::Switch => todo!(),
                 Token::Extern => todo!(),
                 Token::Typedef => todo!(),
-                Token::Ident(ident) => {
-                    dbg!(ident);
-                    Some(self.determine_ident())
-                }
-                tok => {
-                    dbg!(tok);
-                    None
-                }
+                Token::Ident(ident) => self.determine_ident(ident),
+                tok => todo!("{tok:?}"),
             },
             None => todo!(),
         }
     }
 
-    fn determine_ident(&mut self) -> Statement<'a> {
-        let mut index = self.tok_index;
-        loop {
-            match self.lexer.tokens.get(index) {
-                Some(Token::LParent) => return Statement::Function(self.parse_function()),
-                Some(Token::Assign) | Some(Token::Semicolon) => {
-                    return Statement::Variable(self.parse_variable())
-                }
-                Some(Token::Ident(ident)) => {
-                    let is_expr = self.variables.contains(ident);
-                    match self.lexer.tokens.get(index + 1) {
-                        // Pointer or multiplication
-                        Some(Token::Asterisk) => match self.lexer.tokens.get(index + 2) {
-                            Some(Token::Ident(id)) => {
-                                if is_expr {
-                                    return Statement::Expression(
-                                        self.parse_expression(Precedence::Lowest),
-                                    );
-                                } else {
-                                    println!("ID: {}", id);
-                                    return self.parse_var_or_func();
-                                }
-                            }
-                            valid_var_or_func!() => return self.parse_var_or_func(),
-                            _ => {
-                                return Statement::Expression(
-                                    self.parse_expression(Precedence::Lowest),
-                                )
-                            }
-                        },
-                        Some(Token::Ident(id)) => {
-                            dbg!(id);
-                            dbg!(self.peek_tok());
-                            return self.parse_var_or_func();
-                        }
-                        valid_var_or_func!() => return self.parse_var_or_func(),
-                        _ => {
-                            return Statement::Expression(self.parse_expression(Precedence::Lowest))
-                        }
+    fn determine_ident(&mut self, ident: Ident<'a>) -> Statement<'a> {
+        let is_expr = self.variables.contains(ident);
+        match self.lexer.tokens.get(self.tok_index + 1) {
+            // Pointer or multiplication
+            Some(Token::Asterisk) => match self.lexer.tokens.get(self.tok_index + 2) {
+                Some(Token::Ident(id)) => {
+                    if is_expr && self.variables.contains(id) {
+                        let expr: Expression<'a> = self.parse_expression(Precedence::Lowest);
+                        self.expr_to_stmt(expr)
+                    } else {
+                        println!("ID: {}", id);
+                        self.parse_var_or_func()
                     }
                 }
-                None => panic!("Eof"),
-                _ => (),
+                valid_var_or_func!() => return self.parse_var_or_func(),
+                _ => {
+                    let expr = self.parse_expression(Precedence::Lowest);
+                    self.expr_to_stmt(expr)
+                }
+            },
+            // Variable or function name
+            Some(Token::Ident(_)) => {
+                return self.parse_var_or_func();
             }
-            index += 1;
+            // Typical function / variable modifiers
+            valid_var_or_func!() => self.parse_var_or_func(),
+            _ => {
+                let expr = self.parse_expression(Precedence::Lowest);
+                self.expr_to_stmt(expr)
+            }
         }
     }
 
     fn parse_expression(&mut self, prec: Precedence) -> Expression<'a> {
-        let first_expr = self.parse_expr();
+        let first_expr = self.parse_raw_expr();
 
         let mut left_expr = first_expr;
 
@@ -170,7 +157,7 @@ where
                 Token::Equals | Token::Plus | Token::Minus | Token::Asterisk | Token::Divide => {
                     self.parse_infix_expr(left)
                 }
-                //Token::LParent => Expression::Call(self.parse_call_expr(left)),
+                // Token::LParent => Expression::Call(self.parse_call_expr(left)),
                 // Token::LSquare => self.parse_index_expr(left),
                 _ => panic!("Invalid for parsing an infix expr: {:#?}", left),
             },
@@ -178,7 +165,7 @@ where
         }
     }
 
-    fn parse_expr(&mut self) -> Expression<'a> {
+    fn parse_raw_expr(&mut self) -> Expression<'a> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::LitString(str) => {
@@ -235,10 +222,9 @@ where
                 Some(Token::Assign) | Some(Token::Semicolon) => {
                     return Statement::Variable(self.parse_variable())
                 }
+                Some(_) => index += 1,
                 None => panic!("Eof"),
-                _ => (),
             }
-            index += 1;
         }
     }
 
@@ -272,6 +258,7 @@ where
         self.next_tok();
         self.next_tok();
         self.next_tok();
+        dbg!(self.cur_tok());
         let block = self.parse_block();
         let func = FunctionStmt {
             name: ident,
@@ -282,7 +269,7 @@ where
             ret_type: Type::Ident(_type.into()),
             body: Some(block),
         };
-        dbg!(&func);
+        self.next_tok();
         self.reset_variables();
         func
     }
@@ -320,8 +307,8 @@ where
                 self.next_tok()
             }
         };
-        if !expect_peek!(self.peek_tok().copied(), Some(Token::Assign), |_| ()) {
-            if expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| {
+        if !expect_tok!(self.peek_tok().copied(), Some(Token::Assign), |_| ()) {
+            if expect_tok!(self.peek_tok(), Some(Token::Semicolon), |_| {
                 panic!("EEEEE")
             }) {
                 self.next_tok();
@@ -336,7 +323,6 @@ where
                     is_register,
                     is_volatile,
                 };
-                dbg!(&var);
                 return var;
             }
         };
@@ -345,10 +331,14 @@ where
         self.next_tok();
 
         let val = self.parse_expression(Precedence::Lowest);
+        dbg!(self.cur_tok(), self.peek_tok());
 
-        expect_peek!(self.peek_tok(), Some(Token::Semicolon), |_| ());
+        expect_tok!(self.peek_tok(), Some(Token::Semicolon), |_| panic!(
+            "Couldnt find semicolon"
+        ));
         self.next_tok();
-        
+        self.next_tok();
+
         self.variables.insert(ident);
 
         let var = VariableStmt {
@@ -363,20 +353,40 @@ where
         var
     }
 
+    fn parse_loop_interrupter(&mut self, int: LoopInt) -> Statement<'a> {
+        let peek_tok = self.peek_tok();
+        match &peek_tok {
+            Some(Token::Ident(_)) => {
+                self.next_tok();
+                let label_pos = self.tok_index;
+                expect_tok!(self.peek_tok(), Some(Token::Semicolon), |_| ());
+                self.next_tok();
+                self.next_tok();
+                let label = Some(match self.lexer.tokens.get(label_pos) {
+                    Some(Token::Ident(label)) => *label,
+                    _ => todo!(),
+                });
+                match int {
+                    LoopInt::Break => Statement::Break(BreakStmt{ label }),
+                    LoopInt::Continue => Statement::Continue(ContinueStmt { label }),
+                }
+            },
+            Some(Token::Semicolon) => {
+                self.next_tok();
+                self.next_tok();
+                match int { LoopInt::Break=> Statement::Break(BreakStmt { label: None })}
+            }
+            Some(tok) => panic!("Unexpected token after control flow interrupter. Expected Semicolon or label, received {tok:?} instead"),
+            None => panic!(),
+        }
+    }
+
     /// First tok needs to be Token::LCurly
     fn parse_block(&mut self) -> BlockStmt<'a> {
         let mut block = Vec::new();
         self.next_tok();
         while self.cur_tok() != Some(&Token::RCurly) {
-            if self.cur_tok() == Some(&Token::Eol) {
-                self.next_tok();
-                continue;
-            }
-            block.push(match self.parse_stmt() {
-                Some(stmt) => stmt,
-                None => break,
-            });
-            self.next_tok();
+            block.push(self.parse_stmt());
         }
 
         BlockStmt { block }
@@ -485,9 +495,11 @@ where
         self.variables.clear();
     }
 
-    fn skip_newline(&mut self) {
-        while let Some(Token::Eol) = self.cur_tok() {
-            self.next_tok()
+    fn expr_to_stmt(&mut self, expr: Expression<'a>) -> Statement<'a> {
+        if let Some(Token::Semicolon) = self.peek_tok() {
+            self.next_tok();
+            self.next_tok();
         }
+        Statement::Expression(expr)
     }
 }

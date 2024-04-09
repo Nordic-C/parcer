@@ -1,7 +1,7 @@
 use logos::Logos;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Logos)]
-#[logos(skip r#"(?:\/\/[^\n]*|\t|\s|\f)*"#)]
+#[logos(skip r#"(?:\/\/[^\n]*|\t|\s|\f|\n)*"#)]
 pub enum Token<'a> {
     // Keywords
 
@@ -205,7 +205,4 @@ pub enum Token<'a> {
     LCurly,
     #[token("}")]
     RCurly,
-
-    #[token("\n")]
-    Eol
 }

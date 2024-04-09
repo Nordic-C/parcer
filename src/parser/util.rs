@@ -1,5 +1,5 @@
 #[macro_export]
-macro_rules! expect_peek {
+macro_rules! expect_tok {
     ($tok:expr,$pat:pat,$fail:expr) => {{
         if !matches!($tok, $pat) {
             $fail($tok);
