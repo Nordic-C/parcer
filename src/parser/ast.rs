@@ -17,6 +17,8 @@ pub enum Statement<'ast> {
     Enum(EnumStmt<'ast>),
     Union(UnionStmt<'ast>),
 
+    Label(LabelStmt<'ast>),
+
     Function(FunctionStmt<'ast>),
     Variable(VariableStmt<'ast>),
 
@@ -193,6 +195,11 @@ pub struct GotoStmt<'ast> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct BlockStmt<'ast> {
     pub block: Vec<Statement<'ast>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct LabelStmt<'ast> {
+    pub name: Ident<'ast>,
 }
 
 #[derive(Debug, PartialEq, Clone)]

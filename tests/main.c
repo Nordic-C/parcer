@@ -1,5 +1,7 @@
 int main() {
-    int x = 100;
-    x * 9100;
-    char y = 'd';
+  int x = 100;
+  start:
+  x * 9100;
+  char y = 'd';
+  goto start;
 }

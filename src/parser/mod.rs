@@ -3,8 +3,11 @@ use bumpalo::Bump;
 use crate::{
     expect_tok,
     lexer::{tokens::Token, Lexer},
-    parser::ast::{ContinueStmt, Type},
-    valid_var_or_func,
+    parser::{
+        self,
+        ast::{ContinueStmt, LabelStmt, Type},
+    },
+    parser_error, valid_var_or_func,
 };
 
 use self::ast::{
@@ -70,45 +73,43 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     // NOTE: Statements should always set cur tok to the next token
-    pub fn parse_stmt(&mut self) -> Statement<'a> {
-        match self.cur_tok() {
-            Some(tok) => match tok {
-                Token::Auto | Token::Const | Token::Signed | Token::Unsigned | Token::Register => {
-                    Statement::Variable(self.parse_variable())
-                }
-                Token::Inline => Statement::Function(self.parse_function()),
-                Token::Static | Token::Volatile => self.parse_var_or_func(),
-                Token::Break => self.parse_loop_interrupter(LoopInt::Break),
-                Token::Continue => self.parse_loop_interrupter(LoopInt::Continue),
-                Token::Goto => todo!(),
-                Token::Return => todo!(),
-                Token::Enum => todo!(),
-                Token::Struct => todo!(),
-                Token::Union => todo!(),
-                Token::If => todo!(),
-                Token::Else => todo!(),
-                Token::Do => todo!(),
-                Token::For => todo!(),
-                Token::While => todo!(),
-                Token::Switch => todo!(),
-                Token::Extern => todo!(),
-                Token::Typedef => todo!(),
-                Token::Ident(ident) => self.determine_ident(ident),
-                tok => todo!("{tok:?}"),
-            },
-            None => todo!(),
+    pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
+        match self.cur_tok()? {
+            Token::Auto | Token::Const | Token::Signed | Token::Unsigned | Token::Register => {
+                self.parse_variable().map(|stmt| Statement::Variable(stmt))
+            }
+            Token::Inline => self.parse_function().map(|stmt| Statement::Function(stmt)),
+            Token::Static | Token::Volatile => self.parse_var_or_func(),
+            Token::Break => self.parse_loop_interrupter(LoopInt::Break),
+            Token::Continue => self.parse_loop_interrupter(LoopInt::Continue),
+            Token::Goto => self.parse_goto(),
+            Token::Return => todo!(),
+            Token::Enum => todo!(),
+            Token::Struct => todo!(),
+            Token::Union => todo!(),
+            Token::If => todo!(),
+            Token::Else => todo!(),
+            Token::Do => todo!(),
+            Token::For => todo!(),
+            Token::While => todo!(),
+            Token::Switch => todo!(),
+            Token::Extern => todo!(),
+            Token::Typedef => todo!(),
+            Token::Ident(ident) => self.determine_ident(ident),
+            tok => todo!("{tok:?}"),
         }
     }
 
-    fn determine_ident(&mut self, ident: Ident<'a>) -> Statement<'a> {
+    fn determine_ident(&mut self, ident: Ident<'a>) -> Option<Statement<'a>> {
         let is_expr = self.variables.contains(ident);
         match self.lexer.tokens.get(self.tok_index + 1) {
             // Pointer or multiplication
             Some(Token::Asterisk) => match self.lexer.tokens.get(self.tok_index + 2) {
                 Some(Token::Ident(id)) => {
                     if is_expr && self.variables.contains(id) {
-                        let expr: Expression<'a> = self.parse_expression(Precedence::Lowest);
-                        self.expr_to_stmt(expr)
+                        let expr: Option<Expression<'a>> =
+                            self.parse_expression(Precedence::Lowest);
+                        expr.map(|expr| self.expr_to_stmt(expr))
                     } else {
                         println!("ID: {}", id);
                         self.parse_var_or_func()
@@ -116,24 +117,25 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 }
                 valid_var_or_func!() => return self.parse_var_or_func(),
                 _ => {
-                    let expr = self.parse_expression(Precedence::Lowest);
-                    self.expr_to_stmt(expr)
+                    let expr: Option<Expression<'a>> = self.parse_expression(Precedence::Lowest);
+                    expr.map(|expr| self.expr_to_stmt(expr))
                 }
             },
             // Variable or function name
             Some(Token::Ident(_)) => {
                 return self.parse_var_or_func();
             }
+            Some(Token::Colon) => self.parse_label(),
             // Typical function / variable modifiers
             valid_var_or_func!() => self.parse_var_or_func(),
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest);
-                self.expr_to_stmt(expr)
+                expr.map(|expr| self.expr_to_stmt(expr))
             }
         }
     }
 
-    fn parse_expression(&mut self, prec: Precedence) -> Expression<'a> {
+    fn parse_expression(&mut self, prec: Precedence) -> Option<Expression<'a>> {
         let first_expr = self.parse_raw_expr();
 
         let mut left_expr = first_expr;
@@ -142,13 +144,13 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         while !self.peek_is_end() && prec < Self::tok_to_prec(self.peek_tok().unwrap()) {
             self.next_tok();
             // Unwrap here might not be safe. Observe this
-            left_expr = self.parse_infix(left_expr);
+            left_expr = self.parse_infix(left_expr?);
         }
 
         left_expr
     }
 
-    fn parse_infix(&mut self, left: Expression<'a>) -> Expression<'a> {
+    fn parse_infix(&mut self, left: Expression<'a>) -> Option<Expression<'a>> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::Equals | Token::Plus | Token::Minus | Token::Asterisk | Token::Divide => {
@@ -156,23 +158,35 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 }
                 // Token::LParent => Expression::Call(self.parse_call_expr(left)),
                 // Token::LSquare => self.parse_index_expr(left),
-                _ => panic!("Invalid for parsing an infix expr: {:#?}", left),
+                _ => panic!("Invalid for parsing an infix expr: left = {left:#?}, tok = {tok:#?}"),
             },
             _ => todo!(),
         }
     }
 
-    fn parse_raw_expr(&mut self) -> Expression<'a> {
+    fn parse_label(&mut self) -> Option<Statement<'a>> {
+        expect_tok!(self.peek_tok(), Some(Token::Ident(_)), |err| ());
+        self.next_tok();
+        let name = *match self.peek_tok()? {
+            Token::Ident(ident) => ident,
+            _ => unreachable!(),
+        };
+        expect_tok!(self.peek_tok(), Some(Token::Colon), |err| ());
+        self.next_tok();
+        Some(Statement::Label(LabelStmt { name }))
+    }
+
+    fn parse_raw_expr(&mut self) -> Option<Expression<'a>> {
         match self.cur_tok() {
             Some(tok) => match tok {
                 Token::LitString(str) => {
                     let string = str.trim_matches('"');
-                    Expression::LiteralString(string)
+                    Some(Expression::LiteralString(string))
                 }
-                Token::LitInt(int) => Expression::LiteralInt(int.parse().unwrap()),
-                Token::LitFloat(float) => Expression::LiteralFloat(float.parse().unwrap()),
-                Token::LitChar(char) => Expression::LiteralChar(char.chars().nth(1).unwrap()),
-                Token::Ident(ident) => Expression::Ident(ident),
+                Token::LitInt(int) => Some(Expression::LiteralInt(int.parse().unwrap())),
+                Token::LitFloat(float) => Some(Expression::LiteralFloat(float.parse().unwrap())),
+                Token::LitChar(char) => Some(Expression::LiteralChar(char.chars().nth(1).unwrap())),
+                Token::Ident(ident) => Some(Expression::Ident(ident)),
                 Token::ExclamMark
                 | Token::Increment
                 | Token::Decrement
@@ -189,35 +203,35 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         }
     }
 
-    fn parse_prefix_expr(&mut self) -> Expression<'a> {
+    fn parse_prefix_expr(&mut self) -> Option<Expression<'a>> {
         let op = self.tok_to_pre_op();
         self.next_tok();
         let val = self.parse_expression(Precedence::Prefix);
-        Expression::Prefix(PrefixExpr {
-            op,
-            val: self.arena.alloc(val),
-        })
+        Some(Expression::Prefix(PrefixExpr {
+            op: op?,
+            val: self.arena.alloc(val?),
+        }))
     }
 
-    fn parse_infix_expr(&mut self, left: Expression<'a>) -> Expression<'a> {
+    fn parse_infix_expr(&mut self, left: Expression<'a>) -> Option<Expression<'a>> {
         let op = Self::tok_to_bin_op(self.cur_tok().unwrap());
         let prec = Self::tok_to_prec(self.cur_tok().unwrap());
         self.next_tok();
-        let right: Expression<'a> = self.parse_expression(prec);
-        Expression::BinaryOperation(BinOpExpr {
+        let right: Expression<'a> = self.parse_expression(prec)?;
+        Some(Expression::BinaryOperation(BinOpExpr {
             left: self.arena.alloc(left),
             right: self.arena.alloc(right),
-            operator: op,
-        })
+            operator: op?,
+        }))
     }
 
-    fn parse_var_or_func(&mut self) -> Statement<'a> {
+    fn parse_var_or_func(&mut self) -> Option<Statement<'a>> {
         let mut index = self.tok_index;
         loop {
             match self.lexer.tokens.get(index) {
-                Some(Token::LParent) => return Statement::Function(self.parse_function()),
+                Some(Token::LParent) => return Some(Statement::Function(self.parse_function()?)),
                 Some(Token::Assign) | Some(Token::Semicolon) => {
-                    return Statement::Variable(self.parse_variable())
+                    return Some(Statement::Variable(self.parse_variable()?))
                 }
                 Some(_) => index += 1,
                 None => panic!("Eof"),
@@ -225,7 +239,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         }
     }
 
-    fn parse_function(&mut self) -> FunctionStmt<'a> {
+    fn parse_function(&mut self) -> Option<FunctionStmt<'a>> {
         let mut is_volatile = false;
         let mut is_static = false;
         let mut is_inline = false;
@@ -255,7 +269,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         self.next_tok();
         self.next_tok();
         self.next_tok();
-        dbg!(self.cur_tok());
         let block = self.parse_block();
         let func = FunctionStmt {
             name: ident,
@@ -264,14 +277,14 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             is_inline,
             args: Vec::new(),
             ret_type: Type::Ident(_type.into()),
-            body: Some(block),
+            body: Some(block?),
         };
         self.next_tok();
         self.reset_variables();
-        func
+        Some(func)
     }
 
-    fn parse_variable(&mut self) -> VariableStmt<'a> {
+    fn parse_variable(&mut self) -> Option<VariableStmt<'a>> {
         let mut is_const = false;
         let mut is_volatile = false;
         let mut is_static = false;
@@ -320,7 +333,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     is_register,
                     is_volatile,
                 };
-                return var;
+                return Some(var);
             }
         };
         // Skip Token::Assign
@@ -328,28 +341,29 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         self.next_tok();
 
         let val = self.parse_expression(Precedence::Lowest);
-        dbg!(self.cur_tok(), self.peek_tok());
 
-        expect_tok!(self.peek_tok(), Some(Token::Semicolon), |_| panic!(
-            "Couldnt find semicolon"
-        ));
+        expect_tok!(
+            self.peek_tok(),
+            Some(Token::Semicolon),
+            |tok| parser_error!("Couldnt find semicolon, found {tok:?} instead")
+        );
         self.next_tok();
         self.next_tok();
 
         self.variables.insert(ident);
 
-        VariableStmt {
+        Some(VariableStmt {
             name: ident,
-            val: Some(val),
-            _type: _type,
+            val: Some(val?),
+            _type,
             is_const,
             is_static,
             is_volatile,
             is_register,
-        }
+        })
     }
 
-    fn parse_loop_interrupter(&mut self, int: LoopInt) -> Statement<'a> {
+    fn parse_loop_interrupter(&mut self, int: LoopInt) -> Option<Statement<'a>> {
         let peek_tok = self.peek_tok();
         match &peek_tok {
             Some(Token::Ident(_)) => {
@@ -363,16 +377,16 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     _ => todo!(),
                 });
                 match int {
-                    LoopInt::Break => Statement::Break(BreakStmt{ label }),
-                    LoopInt::Continue => Statement::Continue(ContinueStmt { label }),
+                    LoopInt::Break => Some(Statement::Break(BreakStmt{ label })),
+                    LoopInt::Continue => Some(Statement::Continue(ContinueStmt { label })),
                 }
             },
             Some(Token::Semicolon) => {
                 self.next_tok();
                 self.next_tok();
                 match int {
-                    LoopInt::Break => Statement::Break(BreakStmt { label: None }),
-                    LoopInt::Continue => Statement::Continue(ContinueStmt { label: None })
+                    LoopInt::Break => Some(Statement::Break(BreakStmt { label: None })),
+                    LoopInt::Continue => Some(Statement::Continue(ContinueStmt { label: None }))
                 }
             }
             Some(tok) => panic!("Unexpected token after control flow interrupter. Expected Semicolon or label, received {tok:?} instead"),
@@ -380,43 +394,62 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         }
     }
 
+    fn parse_goto(&mut self) -> Option<Statement<'a>> {
+        expect_tok!(self.peek_tok(), Some(Token::Ident(_)), |tok| parser_error!(
+            "Couldnt find name of label, found {tok:?} instead"
+        ));
+        self.next_tok();
+        let label = match *self.cur_tok()? {
+            Token::Ident(id) => id,
+            tok => todo!("{:?}", tok),
+        };
+        expect_tok!(
+            self.peek_tok(),
+            Some(Token::Semicolon),
+            |tok| parser_error!("Couldnt find semicolon, found {tok:?} instead")
+        );
+        self.next_tok();
+        self.next_tok();
+        Some(Statement::Goto(ast::GotoStmt { label: Some(label) }))
+    }
+
     /// First tok needs to be Token::LCurly
-    fn parse_block(&mut self) -> BlockStmt<'a> {
+    fn parse_block(&mut self) -> Option<BlockStmt<'a>> {
         let mut block = Vec::new();
         self.next_tok();
         while self.cur_tok() != Some(&Token::RCurly) {
-            block.push(self.parse_stmt());
+            block.push(self.parse_stmt()?);
         }
 
-        BlockStmt { block }
+        Some(BlockStmt { block })
     }
 
-    fn tok_to_bin_op(tok: &Token<'a>) -> BinOperator {
+    fn tok_to_bin_op(tok: &Token<'a>) -> Option<BinOperator> {
         match tok {
-            Token::Plus => BinOperator::Add,
-            Token::Minus => BinOperator::Sub,
-            Token::Asterisk => BinOperator::Mul,
-            Token::Divide => BinOperator::Div,
-            Token::Mod => BinOperator::Mod,
-            Token::LeftShift => BinOperator::LSh,
-            Token::RightShift => BinOperator::RSh,
-            Token::Ampersand => BinOperator::BAnd,
-            Token::BOr => BinOperator::BOr,
-            Token::XOr => BinOperator::BXor,
+            Token::Plus => Some(BinOperator::Add),
+            Token::Minus => Some(BinOperator::Sub),
+            Token::Asterisk => Some(BinOperator::Mul),
+            Token::Divide => Some(BinOperator::Div),
+            Token::Mod => Some(BinOperator::Mod),
+            Token::LeftShift => Some(BinOperator::LSh),
+            Token::RightShift => Some(BinOperator::RSh),
+            Token::Ampersand => Some(BinOperator::BAnd),
+            Token::BOr => Some(BinOperator::BOr),
+            Token::XOr => Some(BinOperator::BXor),
             _ => todo!(),
         }
     }
 
-    fn tok_to_pre_op(&mut self) -> PreOperator<'a> {
+    fn tok_to_pre_op(&mut self) -> Option<PreOperator<'a>> {
         match self.cur_tok() {
             Some(tok) => match tok {
-                Token::Plus => PreOperator::Pos,
-                Token::Minus => PreOperator::Neg,
-                Token::ExclamMark => PreOperator::Not,
-                Token::Not => PreOperator::BNot,
-                Token::Asterisk => PreOperator::Deref,
-                Token::Sizeof => PreOperator::SizeOf,
-                Token::Ampersand => PreOperator::AddrOf,
+                Token::Plus => Some(PreOperator::Pos),
+                Token::Minus => Some(PreOperator::Neg),
+                Token::ExclamMark => Some(PreOperator::Not),
+                Token::Not => Some(PreOperator::BNot),
+                Token::Asterisk => Some(PreOperator::Deref),
+                Token::Sizeof => Some(PreOperator::SizeOf),
+                Token::Ampersand => Some(PreOperator::AddrOf),
                 Token::LParent => {
                     self.next_tok();
                     let _type = Type::Ident(match self.cur_tok() {
@@ -424,7 +457,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                         _ => todo!("Implement support for more complicated types when casting"),
                     });
                     self.next_tok();
-                    PreOperator::Cast(_type)
+                    Some(PreOperator::Cast(_type))
                 }
                 _ => todo!(),
             },
@@ -465,7 +498,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             | Token::LSquare
             | Token::Dot
             | Token::Arrow => Precedence::Postfix,
-            tok => todo!("precedence for: {tok:?}"),
+            tok => Precedence::Lowest,
         }
     }
 
