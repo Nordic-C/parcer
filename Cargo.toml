@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 bumpalo = "3.16.0"
-clutils = "0.0.10"
+clutils = "0.0.11"
 colored = "2.1.0"
 logos = "0.14.0"
