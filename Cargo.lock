@@ -16,9 +16,9 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "clutils"
-version = "0.0.10"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d16b2816142723508050b15f159fe1fcf0369575ec877d984c2a85a8329952d"
+checksum = "88854e79bd4809cb7c9a7a8a588884b517201d5159852a0f8345ca7f6db73d1e"
 
 [[package]]
 name = "colored"
