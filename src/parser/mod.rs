@@ -69,7 +69,11 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     pub fn parse(&mut self) -> Vec<Statement<'a>> {
-        todo!()
+        let mut out = Vec::new();
+        while let Some(stmt) = self.parse_stmt() {
+            out.push(stmt)
+        }
+        out
     }
 
     // NOTE: Statements should always set cur tok to the next token

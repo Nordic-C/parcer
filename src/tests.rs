@@ -7,14 +7,16 @@ mod tests {
 
     #[test]
     fn test_lexer() {
-        let fh = FileHandler::new("tests/main.c".into()).unwrap();
+        let binding = "tests/main.c".into();
+        let fh = FileHandler::new(&binding).unwrap();
         let lexer = Lexer::new(&fh);
         println!("{:?}", lexer.tokens)
     }
 
     #[test]
     fn test_parser() {
-        let fh = FileHandler::new("tests/main.c".into()).unwrap();
+        let binding = "tests/main.c".into();
+        let fh = FileHandler::new(&binding).unwrap();
         let lexer = Lexer::new(&fh);
         let parse_arena = Bump::new();
         let mut parser = Parser::new(lexer, &parse_arena);

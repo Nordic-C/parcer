@@ -6,7 +6,7 @@ use self::tokens::Token;
 pub mod tokens;
 
 pub struct Lexer<'a> {
-    pub fh: &'a FileHandler,
+    pub fh: &'a FileHandler<'a>,
     pub tokens: Vec<Token<'a>>,
 }
 
