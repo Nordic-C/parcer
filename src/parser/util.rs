@@ -22,10 +22,10 @@ macro_rules! parser_error {
 #[macro_export]
 macro_rules! valid_var_or_func {
     () => {
-        Some(Token::Const)
-            | Some(Token::Static)
-            | Some(Token::Register)
-            | Some(Token::Inline)
-            | Some(Token::Volatile)
+        Token::Const
+            | Token::Static
+            | Token::Register
+            | Token::Inline
+            | Token::Volatile
     };
 }

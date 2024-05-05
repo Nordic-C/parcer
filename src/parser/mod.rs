@@ -3,16 +3,13 @@ use bumpalo::Bump;
 use crate::{
     expect_tok,
     lexer::{tokens::Token, Lexer},
-    parser::{
-        self,
-        ast::{ContinueStmt, LabelStmt, Type},
-    },
+    parser::ast::{ContinueStmt, LabelStmt, PointerRestriction, Type},
     parser_error, valid_var_or_func,
 };
 
 use self::ast::{
-    BinOpExpr, BinOperator, BlockStmt, BreakStmt, Expression, FunctionStmt, Ident, PreOperator,
-    PrefixExpr, Statement, VariableStmt,
+    BinOpExpr, BinOperator, BlockStmt, BreakStmt, CallExpr, Expression, FunctionStmt, Ident,
+    PreOperator, PrefixExpr, Statement, VariableStmt,
 };
 
 use core::option::Option;
@@ -106,10 +103,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
 
     fn determine_ident(&mut self, ident: Ident<'a>) -> Option<Statement<'a>> {
         let is_expr = self.variables.contains(ident);
-        match self.lexer.tokens.get(self.tok_index + 1) {
+        match self.lexer.tokens.get(self.tok_index + 1)? {
             // Pointer or multiplication
-            Some(Token::Asterisk) => match self.lexer.tokens.get(self.tok_index + 2) {
-                Some(Token::Ident(id)) => {
+            Token::Asterisk => match self.lexer.tokens.get(self.tok_index + 2)? {
+                Token::Ident(id) => {
                     if is_expr && self.variables.contains(id) {
                         let expr: Option<Expression<'a>> =
                             self.parse_expression(Precedence::Lowest);
@@ -126,10 +123,14 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 }
             },
             // Variable or function name
-            Some(Token::Ident(_)) => {
+            Token::Ident(_) => {
                 return self.parse_var_or_func();
             }
-            Some(Token::Colon) => self.parse_label(),
+            Token::Colon => self.parse_label(),
+            // Function call
+            Token::LParent => self
+                .parse_call()
+                .map(|call| Statement::Expression(Expression::Call(call))),
             // Typical function / variable modifiers
             valid_var_or_func!() => self.parse_var_or_func(),
             _ => {
@@ -308,7 +309,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                         }
                     }
                     Some(Token::Asterisk) => {
-                        _type = Some(Type::Pointer(self.arena.alloc(_type.unwrap())));
+                        _type = Some(Type::Pointer(
+                            self.arena.alloc(_type.unwrap()),
+                            PointerRestriction::None,
+                        ));
                     }
                     Some(Token::Auto) => _type = Some(Type::Ident("auto")),
                     Some(Token::Const) => is_const = true,
@@ -417,6 +421,24 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         Some(Statement::Goto(ast::GotoStmt { label: Some(label) }))
     }
 
+    fn parse_call(&mut self) -> Option<CallExpr<'a>> {
+        let name = *match self.cur_tok()? {
+            Token::Ident(ident) => ident,
+            _ => unreachable!(),
+        };
+        self.next_tok();
+        let args = match self.peek_tok()? {
+            Token::RParent => Vec::new(),
+            _ => {
+                self.next_tok();
+                todo!()
+            }
+        };
+        Some(CallExpr { name, args })
+    }
+
+    fn parse_args() {}
+
     /// First tok needs to be Token::LCurly
     fn parse_block(&mut self) -> Option<BlockStmt<'a>> {
         let mut block = Vec::new();
@@ -426,6 +448,15 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         }
 
         Some(BlockStmt { block })
+    }
+
+    fn parse_type(&mut self) -> Option<Type<'a>> {
+        Some(match self.cur_tok()? {
+            Token::Struct => Type::Struct(todo!()),
+            Token::Enum => Type::Enum(todo!()),
+            Token::Union => Type::Union(todo!()),
+            Token::Ident(ident) => Type::
+        })
     }
 
     fn tok_to_bin_op(tok: &Token<'a>) -> Option<BinOperator> {

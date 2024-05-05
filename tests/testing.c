@@ -1,13 +1,5 @@
-int m(int x) {
-    return x;
-}
+#define $TEST
 
-int main(void) {
-    int x = 0;
-    return m(x += 1);
-}
-
-int test() {
-    if (1)
-        return 1;
+$TEST int main(void) {
+    auto arr[] = {100, 200, 300, 400};
 }

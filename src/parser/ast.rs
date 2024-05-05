@@ -2,12 +2,24 @@ pub type Ident<'ast> = &'ast str;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Type<'ast> {
-    Struct(StructStmt<'ast>),
-    Enum(EnumStmt<'ast>),
-    Union(UnionStmt<'ast>),
-    Auto,
-    Ident(&'ast str),
-    Pointer(&'ast Type<'ast>),
+    /// The regular type
+    Ident(Ident<'ast>),
+    /// Pointer to a type
+    Pointer(&'ast Type<'ast>, PointerRestriction),
+    /// Array of a type
+    Array(&'ast Type<'ast>, usize),
+    /// Struct pointer
+    Struct(&'ast Type<'ast>),
+    /// Union pointer
+    Union(&'ast Type<'ast>),
+    /// Enum Pointer
+    Enum(&'ast Type<'ast>),
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum PointerRestriction {
+    Restrict,
+    None
 }
 
 #[derive(Debug, PartialEq, Clone)]
