@@ -1,1 +1,1 @@
-int test, *lol;
+const volatile static int x = 0;

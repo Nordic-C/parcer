@@ -29,3 +29,16 @@ macro_rules! valid_var_or_func {
             | Token::Volatile
     };
 }
+
+#[macro_export]
+macro_rules! encounter_modifier {
+    ($var:expr,$msg:expr) => {
+        {
+            if !$var {
+                $var = true;
+            } else {
+                parser_error!($msg);
+            }
+        }
+    };
+}

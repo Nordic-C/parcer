@@ -17,6 +17,22 @@ pub enum Type<'ast> {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
+pub enum DataStorageClass {
+    Static,
+    Extern,
+    Register,
+    Auto,
+    None,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum CompositeDataType {
+    Struct,
+    Union,
+    Enum,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PointerRestriction {
     Restrict,
     None
@@ -130,8 +146,7 @@ pub struct VariableStmt<'ast> {
     pub name: Ident<'ast>,
     pub is_volatile: bool,
     pub is_const: bool,
-    pub is_static: bool,
-    pub is_register: bool,
+    pub data_storage_class: DataStorageClass,
     pub _type: Type<'ast>,
     pub val: Option<Expression<'ast>>,
 }
