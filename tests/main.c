@@ -1,1 +1,1 @@
-const volatile static int x = 0;
+static const int BALLZ = 500;

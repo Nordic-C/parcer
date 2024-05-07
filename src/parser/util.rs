@@ -42,3 +42,16 @@ macro_rules! encounter_modifier {
         }
     };
 }
+
+#[macro_export]
+macro_rules! encounter_dsc_modifier {
+    ($var:expr,$class:expr) => {
+        {
+            if let DataStorageClass::None = $var {
+                $var = $class;
+            } else {
+                parser_error!("Encountered second data storage class specifier: {:?}", $class);
+            }
+        }
+    };
+}

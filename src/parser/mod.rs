@@ -1,15 +1,15 @@
 use bumpalo::Bump;
 
 use crate::{
-    encounter_modifier, expect_tok,
+    encounter_dsc_modifier, encounter_modifier, expect_tok,
     lexer::{tokens::Token, Lexer},
     parser::ast::{ContinueStmt, LabelStmt, PointerRestriction, Type},
     parser_error, valid_var_or_func,
 };
 
 use self::ast::{
-    BinOpExpr, BinOperator, BlockStmt, BreakStmt, CallExpr, CompositeDataType, Expression,
-    FunctionStmt, Ident, PreOperator, PrefixExpr, Statement, VariableStmt,
+    BinOpExpr, BinOperator, BlockStmt, BreakStmt, CallExpr, CompositeDataType, DataStorageClass,
+    Expression, FunctionStmt, Ident, PreOperator, PrefixExpr, Statement, VariableStmt,
 };
 
 use core::option::Option;
@@ -68,7 +68,8 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn parse(&mut self) -> Vec<Statement<'a>> {
         let mut out = Vec::new();
         while let Some(stmt) = self.parse_stmt() {
-            out.push(stmt)
+            out.push(stmt);
+            dbg!("aaaaa");
         }
         out
     }
@@ -76,13 +77,13 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
         match self.cur_tok()? {
             Token::Ident(ident) => self.parse_ident(),
-            Token::Auto => todo!(),
-            Token::Const => todo!(),
-            Token::Static => todo!(),
-            Token::Register => todo!(),
-            Token::Volatile => todo!(),
+            Token::Auto => self.parse_variable(),
+            Token::Const => self.parse_variable(),
+            Token::Static => self.parse_var_or_func(),
+            Token::Register => self.parse_variable(),
+            Token::Volatile => self.parse_var_or_func(),
             Token::Restrict => todo!(),
-            Token::Inline => todo!(),
+            Token::Inline => self.parse_function(),
             Token::Signed => todo!(),
             Token::Unsigned => todo!(),
             Token::Break => todo!(),
@@ -156,17 +157,28 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         }
     }
 
+    fn parse_expr(&mut self) -> Option<Expression<'a>> {
+        match self.cur_tok()? {
+            Token::LitString(_) => todo!(),
+            Token::LitInt(int) => Some(Expression::LiteralInt(int.parse().unwrap())),
+            Token::LitFloat(_) => todo!(),
+            Token::LitChar(_) => todo!(),
+            Token::Ident(_) => todo!(),
+            _ => todo!(),
+        }
+    }
+
     fn parse_variable(&mut self) -> Option<Statement<'a>> {
-        let mut type_ = None;
-        let mut name = None;
+        let mut type_ = if let Token::Ident(ident) = self.cur_tok()? {
+            Some(Type::Ident(&ident))
+        } else {
+            None
+        };
         let mut is_const = false;
         let mut is_volatile = false;
-        let mut is_static = false;
-        let mut is_register = false;
-        let mut is_extern = false;
-        let mut is_auto = false;
+        let mut data_storage_class = DataStorageClass::None;
         while self.peek_tok()? != &Token::Assign && self.peek_tok()? != &Token::Semicolon {
-            match self.peek_tok()? {
+            match *self.cur_tok()? {
                 Token::Volatile => {
                     encounter_modifier!(is_volatile, "Encountered second `volatile` specification")
                 }
@@ -174,26 +186,58 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     encounter_modifier!(is_const, "Encountered second `const` specification")
                 }
                 Token::Auto => {
-                    encounter_modifier!(is_auto, "Encountered second `auto` specification")
+                    encounter_dsc_modifier!(data_storage_class, DataStorageClass::Auto)
                 }
                 Token::Static => {
-                    encounter_modifier!(is_static, "Encountered second `static` specification")
+                    encounter_dsc_modifier!(data_storage_class, DataStorageClass::Static)
                 }
                 Token::Register => {
-                    encounter_modifier!(is_register, "Encountered second `register` specification")
+                    encounter_dsc_modifier!(data_storage_class, DataStorageClass::Register)
                 }
                 Token::Extern => {
-                    encounter_modifier!(is_extern, "Encountered second `extern` specification")
+                    encounter_dsc_modifier!(data_storage_class, DataStorageClass::Extern)
                 }
                 //Token::Signed => todo!(),
                 //Token::Unsigned => todo!(),
                 Token::Enum => todo!(),
                 Token::Struct => todo!(),
                 Token::Union => todo!(),
-                Token::Ident(type_name) => todo!(),
+                Token::Ident(ident) => match type_ {
+                    Some(_) => (),
+                    None => type_ = Some(Type::Ident(ident)),
+                },
+                tok => todo!("{tok:?}"),
             }
+            self.next_tok();
         }
-        todo!()
+        let name = match self.cur_tok()? {
+            Token::Ident(ident) => *ident,
+            _ => unreachable!(),
+        };
+        self.next_tok();
+        let expr = match self.cur_tok()? {
+            Token::Assign => {
+                self.next_tok();
+                self.parse_expr()
+            }
+            Token::Semicolon => None,
+            _ => todo!(),
+        };
+        expect_tok!(self.peek_tok()?, Token::Semicolon, |tok| {
+            parser_error!("Expected semicolon after variable definition, received: {tok:?} instead");
+        });
+        // go to semicolon
+        self.next_tok();
+        // go to token after semicolon
+        self.next_tok();
+        Some(Statement::Variable(VariableStmt {
+            name,
+            is_volatile,
+            is_const,
+            data_storage_class,
+            _type: type_?,
+            val: expr,
+        }))
     }
 
     fn parse_function(&mut self) -> Option<Statement<'a>> {
@@ -208,13 +252,13 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             // Pointer type or multiplication
             Token::Asterisk => self.parse_var_or_func(),
             // variable specific keywords
-            Token::Const | Token::Register | Token::Auto => todo!(),
+            Token::Const | Token::Register | Token::Auto => self.parse_variable(),
             // Function specific keywords
             Token::Inline => todo!(),
             // Variable or function specifix keywords
             Token::Static | Token::Extern | Token::Volatile => todo!(),
             // Expression
-            _ => todo!(),
+            tok => todo!("{tok:?}"),
         }
     }
 
@@ -232,7 +276,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 Token::LParent => break self.parse_function(),
                 Token::Comma => todo!("multi variable"),
                 Token::Assign | Token::Semicolon => break self.parse_variable(),
-                _ => (),
+                tok => (),
             }
             peek_ahead += 1;
         }
