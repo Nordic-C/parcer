@@ -1,5 +1,7 @@
-#define $TEST
+int main() {
+    __auto_type deez = 100;
+}
 
-$TEST int main(void) {
-    auto arr[] = {100, 200, 300, 400};
+void test(int *const const const restrict restrict age) {
+
 }

@@ -1,1 +1,3 @@
-static const int BALLZ = 500;
+int main(int argc, char** argv) {
+    
+}

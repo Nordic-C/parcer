@@ -3,13 +3,13 @@ use bumpalo::Bump;
 use crate::{
     encounter_dsc_modifier, encounter_modifier, expect_tok,
     lexer::{tokens::Token, Lexer},
-    parser::ast::{ContinueStmt, LabelStmt, PointerRestriction, Type},
-    parser_error, valid_var_or_func,
+    parser::ast::{PointerRestriction, Type},
+    parser_error,
 };
 
 use self::ast::{
-    BinOpExpr, BinOperator, BlockStmt, BreakStmt, CallExpr, CompositeDataType, DataStorageClass,
-    Expression, FunctionStmt, Ident, PreOperator, PrefixExpr, Statement, VariableStmt,
+    CompositeDataType, DataStorageClass, Expression, Field, FunctionStmt, Ident, Statement,
+    VariableStmt,
 };
 
 use core::option::Option;
@@ -69,7 +69,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut out = Vec::new();
         while let Some(stmt) = self.parse_stmt() {
             out.push(stmt);
-            dbg!("aaaaa");
         }
         out
     }
@@ -169,7 +168,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     fn parse_variable(&mut self) -> Option<Statement<'a>> {
-        let mut type_ = if let Token::Ident(ident) = self.cur_tok()? {
+        let mut var_type = if let Token::Ident(ident) = self.cur_tok()? {
             Some(Type::Ident(&ident))
         } else {
             None
@@ -197,14 +196,24 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 Token::Extern => {
                     encounter_dsc_modifier!(data_storage_class, DataStorageClass::Extern)
                 }
+                Token::Asterisk => {
+                    let type_ref = self.arena.alloc(var_type.unwrap());
+                    let restricted = if let Token::Restrict = self.peek_tok()? {
+                        self.next_tok();
+                        PointerRestriction::Restrict
+                    } else {
+                        PointerRestriction::None
+                    };
+                    var_type = Some(Type::Pointer(type_ref, vec![restricted]));
+                }
                 //Token::Signed => todo!(),
                 //Token::Unsigned => todo!(),
-                Token::Enum => todo!(),
-                Token::Struct => todo!(),
-                Token::Union => todo!(),
-                Token::Ident(ident) => match type_ {
+                Token::Enum => var_type = self.encounter_cdt_pointer(CompositeDataType::Enum),
+                Token::Struct => var_type = self.encounter_cdt_pointer(CompositeDataType::Struct),
+                Token::Union => var_type = self.encounter_cdt_pointer(CompositeDataType::Union),
+                Token::Ident(ident) => match var_type {
                     Some(_) => (),
-                    None => type_ = Some(Type::Ident(ident)),
+                    None => var_type = Some(Type::Ident(ident)),
                 },
                 tok => todo!("{tok:?}"),
             }
@@ -224,7 +233,9 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             _ => todo!(),
         };
         expect_tok!(self.peek_tok()?, Token::Semicolon, |tok| {
-            parser_error!("Expected semicolon after variable definition, received: {tok:?} instead");
+            parser_error!(
+                "Expected semicolon after variable definition, received: {tok:?} instead"
+            );
         });
         // go to semicolon
         self.next_tok();
@@ -235,13 +246,159 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             is_volatile,
             is_const,
             data_storage_class,
-            _type: type_?,
+            _type: var_type?,
             val: expr,
         }))
     }
 
+    fn encounter_cdt_pointer(&mut self, _type: CompositeDataType) -> Option<Type<'a>> {
+        let name = *match self.peek_tok()? {
+            Token::Ident(ident) => ident,
+            _ => unreachable!(),
+        };
+        self.next_tok();
+        match _type {
+            CompositeDataType::Struct => Some(Type::Struct(name)),
+            CompositeDataType::Enum => Some(Type::Enum(name)),
+            CompositeDataType::Union => Some(Type::Union(name)),
+        }
+    }
+
     fn parse_function(&mut self) -> Option<Statement<'a>> {
-        todo!()
+        dbg!("Parsing function");
+        let mut ret_type = if let Token::Ident(ident) = self.cur_tok()? {
+            Some(Type::Ident(&ident))
+        } else {
+            None
+        };
+        let mut should_inline = false;
+        let mut is_volatile = false;
+        let mut data_storage_class = DataStorageClass::None;
+        while self.peek_tok()? != &Token::LParent {
+            match *self.cur_tok()? {
+                Token::Volatile => {
+                    encounter_modifier!(is_volatile, "Encountered second `volatile` specification")
+                }
+                Token::Inline => {
+                    encounter_modifier!(should_inline, "Encountered second `inline` specification")
+                }
+                Token::Static => {
+                    encounter_dsc_modifier!(data_storage_class, DataStorageClass::Static)
+                }
+                Token::Extern => {
+                    encounter_dsc_modifier!(data_storage_class, DataStorageClass::Extern)
+                }
+                Token::Asterisk => {
+                    let type_ref = self.arena.alloc(ret_type.unwrap());
+                    let restricted = if let Token::Restrict = self.peek_tok()? {
+                        self.next_tok();
+                        PointerRestriction::Restrict
+                    } else {
+                        PointerRestriction::None
+                    };
+                    ret_type = Some(Type::Pointer(type_ref, vec![restricted]));
+                }
+                //Token::Signed => todo!(),
+                //Token::Unsigned => todo!(),
+                Token::Enum => ret_type = self.encounter_cdt_pointer(CompositeDataType::Enum),
+                Token::Struct => ret_type = self.encounter_cdt_pointer(CompositeDataType::Struct),
+                Token::Union => ret_type = self.encounter_cdt_pointer(CompositeDataType::Union),
+                Token::Ident(ident) => match ret_type {
+                    Some(_) => (),
+                    None => ret_type = Some(Type::Ident(ident)),
+                },
+                tok => todo!("{tok:?}"),
+            }
+            self.next_tok();
+        }
+        let name = match self.cur_tok()? {
+            Token::Ident(ident) => *ident,
+            _ => unreachable!(),
+        };
+        expect_tok!(self.peek_tok()?, Token::LParent, |tok| {
+            parser_error!(
+                "Expected left parenthesis after function name, recevied {tok:?} instead"
+            );
+        });
+        self.next_tok();
+        let args = self.parse_field_list(Token::Comma, Token::RParent)?;
+        todo!(
+            "{:#?}",
+            Some(Statement::Function(FunctionStmt {
+                name,
+                is_volatile,
+                should_inline,
+                data_storage_class,
+                args,
+                ret_type: ret_type?,
+                body: None,
+            }))
+        )
+    }
+
+    /// First token needs to be the token before the first type
+    fn parse_field_list(&mut self, seperator: Token<'a>, end: Token<'a>) -> Option<Vec<Field<'a>>> {
+        let mut fields: Vec<Field<'a>> = Vec::new();
+        self.next_tok();
+        // manually parse first field
+        let field = if self.peek_tok()? != &end {
+            let type_ = self.parse_type()?;
+            self.next_tok();
+            let name = match self.cur_tok()? {
+                Token::Ident(ident) => ident,
+                _ => todo!(),
+            };
+            Field {
+                name,
+                field_type: type_,
+            }
+        } else {
+            return Some(vec![]);
+        };
+        fields.push(field);
+        while self.peek_tok()? == &seperator && self.peek_tok()? != &end {
+            self.next_tok();
+            self.next_tok();
+            let type_ = self.parse_type();
+            self.next_tok();
+            let name = *match self.cur_tok()? {
+                Token::Ident(ident) => ident,
+                _ => todo!(),
+            };
+            fields.push(Field {
+                name,
+                field_type: type_?,
+            })
+        }
+        // Token is the end function argument token
+        self.next_tok();
+        Some(fields)
+    }
+
+    /// First token needs to be the first token of the type
+    fn parse_type(&mut self) -> Option<Type<'a>> {
+        match self.cur_tok()? {
+            Token::Signed => todo!(),
+            Token::Unsigned => todo!(),
+            Token::Enum => todo!(),
+            Token::Struct => todo!(),
+            Token::Union => todo!(),
+            Token::Ident(ident) => {
+                let mut type_ = Type::Ident(ident);
+                while let Token::Asterisk = self.peek_tok()? {
+                    self.next_tok();
+                    let restriction = match self.cur_tok()? {
+                        Token::Const => PointerRestriction::Const,
+                        Token::Restrict => PointerRestriction::Restrict,
+                        _ => PointerRestriction::None,
+                    };
+                    let type_ref = self.arena.alloc(type_);
+                    type_ = Type::Pointer(type_ref, vec![restriction]);
+                }
+                Some(type_)
+            }
+            tok => panic!("Cannot parse type from token: {tok:?}"),
+        }
     }
 
     #[inline(always)]
@@ -276,7 +433,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 Token::LParent => break self.parse_function(),
                 Token::Comma => todo!("multi variable"),
                 Token::Assign | Token::Semicolon => break self.parse_variable(),
-                tok => (),
+                _ => (),
             }
             peek_ahead += 1;
         }

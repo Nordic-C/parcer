@@ -55,3 +55,4 @@ macro_rules! encounter_dsc_modifier {
         }
     };
 }
+

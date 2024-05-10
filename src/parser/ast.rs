@@ -5,15 +5,15 @@ pub enum Type<'ast> {
     /// The regular type
     Ident(Ident<'ast>),
     /// Pointer to a type
-    Pointer(&'ast Type<'ast>, PointerRestriction),
+    Pointer(&'ast Type<'ast>, Vec<PointerRestriction>),
     /// Array of a type
     Array(&'ast Type<'ast>, usize),
     /// Struct pointer
-    Struct(&'ast Type<'ast>),
+    Struct(Ident<'ast>),
     /// Union pointer
-    Union(&'ast Type<'ast>),
+    Union(Ident<'ast>),
     /// Enum Pointer
-    Enum(&'ast Type<'ast>),
+    Enum(Ident<'ast>),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -35,6 +35,7 @@ pub enum CompositeDataType {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PointerRestriction {
     Restrict,
+    Const,
     None
 }
 
@@ -115,7 +116,7 @@ pub struct StructStmt<'ast> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field<'ast> {
     pub name: Ident<'ast>,
-    pub _type: Type<'ast>,
+    pub field_type: Type<'ast>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -134,8 +135,8 @@ pub struct UnionStmt<'ast> {
 pub struct FunctionStmt<'ast> {
     pub name: Ident<'ast>,
     pub is_volatile: bool,
-    pub is_static: bool,
-    pub is_inline: bool,
+    pub should_inline: bool,
+    pub data_storage_class: DataStorageClass,
     pub args: Vec<Field<'ast>>,
     pub ret_type: Type<'ast>,
     pub body: Option<BlockStmt<'ast>>,
