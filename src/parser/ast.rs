@@ -5,7 +5,11 @@ pub enum Type<'ast> {
     /// The regular type
     Ident(Ident<'ast>),
     /// Pointer to a type
-    Pointer(&'ast Type<'ast>, Vec<PointerRestriction>),
+    Pointer {
+        type_: &'ast Type<'ast>,
+        is_const: bool,
+        is_restricted: bool,
+    },
     /// Array of a type
     Array(&'ast Type<'ast>, usize),
     /// Struct pointer
@@ -30,13 +34,6 @@ pub enum CompositeDataType {
     Struct,
     Union,
     Enum,
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum PointerRestriction {
-    Restrict,
-    Const,
-    None
 }
 
 #[derive(Debug, PartialEq, Clone)]

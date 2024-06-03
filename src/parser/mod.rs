@@ -3,7 +3,7 @@ use bumpalo::Bump;
 use crate::{
     encounter_dsc_modifier, encounter_modifier, expect_tok,
     lexer::{tokens::Token, Lexer},
-    parser::ast::{PointerRestriction, Type},
+    parser::ast::Type,
     parser_error,
 };
 
@@ -198,13 +198,21 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 }
                 Token::Asterisk => {
                     let type_ref = self.arena.alloc(var_type.unwrap());
-                    let restricted = if let Token::Restrict = self.peek_tok()? {
+                    let mut is_restricted = false;
+                    let mut is_const = false;
+                    while let Token::Restrict | Token::Const = self.peek_tok()? {
+                        match self.peek_tok()? {
+                            Token::Restrict => is_restricted = true,
+                            Token::Const => is_const = true,
+                            _ => unreachable!(),
+                        }
                         self.next_tok();
-                        PointerRestriction::Restrict
-                    } else {
-                        PointerRestriction::None
-                    };
-                    var_type = Some(Type::Pointer(type_ref, vec![restricted]));
+                    }
+                    var_type = Some(Type::Pointer {
+                        type_: type_ref,
+                        is_const,
+                        is_restricted,
+                    });
                 }
                 //Token::Signed => todo!(),
                 //Token::Unsigned => todo!(),
@@ -290,13 +298,23 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 }
                 Token::Asterisk => {
                     let type_ref = self.arena.alloc(ret_type.unwrap());
-                    let restricted = if let Token::Restrict = self.peek_tok()? {
+                    let is_restricted = if let Token::Restrict = self.peek_tok()? {
                         self.next_tok();
-                        PointerRestriction::Restrict
+                        true
                     } else {
-                        PointerRestriction::None
+                        false
                     };
-                    ret_type = Some(Type::Pointer(type_ref, vec![restricted]));
+                    let is_const = if let Token::Const = self.peek_tok()? {
+                        self.next_tok();
+                        true
+                    } else {
+                        false
+                    };
+                    ret_type = Some(Type::Pointer {
+                        type_: type_ref,
+                        is_const,
+                        is_restricted,
+                    });
                 }
                 //Token::Signed => todo!(),
                 //Token::Unsigned => todo!(),
@@ -320,20 +338,30 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 "Expected left parenthesis after function name, recevied {tok:?} instead"
             );
         });
-        self.next_tok();
         let args = self.parse_field_list(Token::Comma, Token::RParent)?;
-        todo!(
-            "{:#?}",
-            Some(Statement::Function(FunctionStmt {
-                name,
-                is_volatile,
-                should_inline,
-                data_storage_class,
-                args,
-                ret_type: ret_type?,
-                body: None,
-            }))
-        )
+        expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
+            parser_error!("Expected right parenthesis after arguments, received {tok:?} instead");
+        });
+        self.next_tok();
+        let stmt = Statement::Function(FunctionStmt {
+            name,
+            is_volatile,
+            should_inline,
+            data_storage_class,
+            args,
+            ret_type: ret_type?,
+            body: None,
+        });
+        match self.peek_tok()? {
+            Token::Semicolon => {
+                self.next_tok();
+                self.next_tok();
+                return Some(stmt)
+            },
+            Token::LCurly => todo!(),
+            tok => parser_error!("Expected semicolon or left curly brackets after function argument parenthesis, received {tok:?} instead")
+        }
+        todo!()
     }
 
     /// First token needs to be the token before the first type
@@ -341,17 +369,16 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut fields: Vec<Field<'a>> = Vec::new();
         self.next_tok();
         // manually parse first field
+        dbg!(&end);
         let field = if self.peek_tok()? != &end {
-            let type_ = self.parse_type()?;
+            self.next_tok();
+            let field_type = self.parse_type()?;
             self.next_tok();
             let name = match self.cur_tok()? {
                 Token::Ident(ident) => ident,
                 _ => todo!(),
             };
-            Field {
-                name,
-                field_type: type_,
-            }
+            Field { name, field_type }
         } else {
             return Some(vec![]);
         };
@@ -370,8 +397,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 field_type: type_?,
             })
         }
-        // Token is the end function argument token
-        self.next_tok();
         Some(fields)
     }
 
@@ -386,14 +411,38 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Ident(ident) => {
                 let mut type_ = Type::Ident(ident);
                 while let Token::Asterisk = self.peek_tok()? {
+                    // Restrict and const
                     self.next_tok();
-                    let restriction = match self.cur_tok()? {
-                        Token::Const => PointerRestriction::Const,
-                        Token::Restrict => PointerRestriction::Restrict,
-                        _ => PointerRestriction::None,
-                    };
                     let type_ref = self.arena.alloc(type_);
-                    type_ = Type::Pointer(type_ref, vec![restriction]);
+                    // TODO: check for const and restrict here
+                    type_ = Type::Pointer {
+                        type_: type_ref,
+                        is_const: false,
+                        is_restricted: false,
+                    };
+                    while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
+                        self.next_tok();
+                        match self.cur_tok()? {
+                            Token::Asterisk => {
+                                type_ = Type::Pointer {
+                                    type_: self.arena.alloc(type_),
+                                    is_const: false,
+                                    is_restricted: false,
+                                }
+                            }
+                            Token::Restrict => {
+                                if let Type::Pointer { is_restricted, .. } = &mut type_ {
+                                    *is_restricted = true;
+                                }
+                            }
+                            Token::Const => {
+                                if let Type::Pointer { is_const, .. } = &mut type_ {
+                                    *is_const = true;
+                                }
+                            },
+                            _ => unreachable!(),
+                        }
+                    }
                 }
                 Some(type_)
             }

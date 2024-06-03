@@ -1,3 +1,1 @@
-int main(int argc, char** argv) {
-    
-}
+int test(int argc, char *restrict const *const restrict const argv);
