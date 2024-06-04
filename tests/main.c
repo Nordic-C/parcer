@@ -1,3 +1,1 @@
-int main(int argc, char *argv[]) {
-    
-}
+const const int x = 100;

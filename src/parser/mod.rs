@@ -1,22 +1,9 @@
-use ast::BlockStmt;
-use bumpalo::Bump;
-
-use crate::{
-    encounter_dsc_modifier, encounter_modifier, expect_tok,
-    lexer::{tokens::Token, Lexer},
-    parser::ast::Type,
-    parser_error,
-};
-
-use self::ast::{
-    CompositeDataType, DataStorageClass, Expression, Field, FunctionStmt, Ident, Statement,
-    VariableStmt,
-};
-
-use core::option::Option;
 use std::collections::HashSet;
 
-pub mod ast;
+use bumpalo::Bump;
+
+use crate::{ast::{expr::*, stmt::*, types::*, *}, encounter_dsc_modifier, encounter_modifier, expect_tok, lexer::{tokens::Token, Lexer}, parser_error};
+
 mod util;
 
 #[repr(u8)]
@@ -77,11 +64,8 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
         match self.cur_tok()? {
             Token::Ident(_) => self.parse_ident(),
-            Token::Auto => self.parse_variable(),
-            Token::Const => self.parse_variable(),
-            Token::Static => self.parse_var_or_func(),
-            Token::Register => self.parse_variable(),
-            Token::Volatile => self.parse_var_or_func(),
+            Token::Auto | Token::Const | Token::Register => self.parse_variable(),
+            Token::Static | Token::Volatile | Token::Extern => self.parse_var_or_func(),
             Token::Inline => self.parse_function(),
             Token::Signed => todo!(),
             Token::Unsigned => todo!(),
@@ -97,7 +81,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::For => todo!(),
             Token::While => todo!(),
             Token::Switch => todo!(),
-            Token::Extern => todo!(),
             Token::Typedef => todo!(),
             Token::Semicolon => {
                 self.next_tok();
@@ -133,6 +116,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             && self.peek_tok()? != &Token::LSquare
         {
             match *self.cur_tok()? {
+                // TODO: Allow multiple const/volatile
                 Token::Volatile => {
                     encounter_modifier!(is_volatile, "Encountered second `volatile` specification")
                 }
@@ -348,7 +332,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
 
     /// First token needs to be the token before the first type
     fn parse_field_list(&mut self, seperator: Token<'a>, end: Token<'a>) -> Option<Vec<Field<'a>>> {
-        // TODO: Array args
         let mut fields: Vec<Field<'a>> = Vec::new();
         self.next_tok();
         // manually parse first field
@@ -423,7 +406,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     // Restrict and const
                     self.next_tok();
                     let type_ref = self.arena.alloc(type_);
-                    // TODO: check for const and restrict here
                     type_ = Type::Pointer {
                         type_: type_ref,
                         is_const: false,
