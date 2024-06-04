@@ -181,6 +181,7 @@ pub enum Token<'a> {
     Dot,
     #[token("->")]
     Arrow,
+    // TODO: Remove this
     #[token("\\")]
     BackSlash,
     #[token("&")]

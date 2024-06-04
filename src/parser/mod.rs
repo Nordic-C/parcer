@@ -1,3 +1,4 @@
+use ast::BlockStmt;
 use bumpalo::Bump;
 
 use crate::{
@@ -75,13 +76,12 @@ impl<'a, 's: 'a> Parser<'a, 's> {
 
     pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
         match self.cur_tok()? {
-            Token::Ident(ident) => self.parse_ident(),
+            Token::Ident(_) => self.parse_ident(),
             Token::Auto => self.parse_variable(),
             Token::Const => self.parse_variable(),
             Token::Static => self.parse_var_or_func(),
             Token::Register => self.parse_variable(),
             Token::Volatile => self.parse_var_or_func(),
-            Token::Restrict => todo!(),
             Token::Inline => self.parse_function(),
             Token::Signed => todo!(),
             Token::Unsigned => todo!(),
@@ -93,76 +93,28 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Struct => self.parse_var_or_func(),
             Token::Union => todo!(),
             Token::If => todo!(),
-            Token::Else => todo!(),
             Token::Do => todo!(),
             Token::For => todo!(),
             Token::While => todo!(),
             Token::Switch => todo!(),
-            Token::Case => todo!(),
-            Token::Default => todo!(),
             Token::Extern => todo!(),
-            Token::Sizeof => todo!(),
             Token::Typedef => todo!(),
-            Token::LitString(_) => todo!(),
-            Token::LitInt(_) => todo!(),
-            Token::LitFloat(_) => todo!(),
-            Token::LitChar(_) => todo!(),
-            Token::Assign => todo!(),
-            Token::AssignAdd => todo!(),
-            Token::AssignSub => todo!(),
-            Token::AssignMul => todo!(),
-            Token::AssignDiv => todo!(),
-            Token::AssignMod => todo!(),
-            Token::AssignBAnd => todo!(),
-            Token::AssignBOr => todo!(),
-            Token::AssignXor => todo!(),
-            Token::AssignLSh => todo!(),
-            Token::AssignRSh => todo!(),
-            Token::Equals => todo!(),
-            Token::NEquals => todo!(),
-            Token::LTEquals => todo!(),
-            Token::GTEquals => todo!(),
-            Token::LessThan => todo!(),
-            Token::GreaterThan => todo!(),
-            Token::ExclamMark => todo!(),
-            Token::And => todo!(),
-            Token::Or => todo!(),
-            Token::BOr => todo!(),
-            Token::XOr => todo!(),
-            Token::Not => todo!(),
-            Token::LeftShift => todo!(),
-            Token::RightShift => todo!(),
-            Token::Plus => todo!(),
-            Token::Minus => todo!(),
-            Token::Divide => todo!(),
-            Token::Mod => todo!(),
-            Token::Increment => todo!(),
-            Token::Decrement => todo!(),
-            Token::Comma => todo!(),
-            Token::Semicolon => todo!(),
-            Token::Dot => todo!(),
-            Token::Arrow => todo!(),
-            Token::BackSlash => todo!(),
-            Token::Ampersand => todo!(),
-            Token::Asterisk => todo!(),
-            Token::QuestionMark => todo!(),
-            Token::Colon => todo!(),
-            Token::LSquare => todo!(),
-            Token::RSquare => todo!(),
-            Token::LParent => todo!(),
-            Token::RParent => todo!(),
-            Token::LCurly => todo!(),
-            Token::RCurly => todo!(),
+            Token::Semicolon => {
+                self.next_tok();
+                self.parse_stmt()
+            }
+            Token::LCurly => self.parse_block().map(|block| Statement::Block(block)),
+            _ => self.parse_expr().map(|expr| Statement::Expression(expr)),
         }
     }
 
     fn parse_expr(&mut self) -> Option<Expression<'a>> {
         match self.cur_tok()? {
-            Token::LitString(_) => todo!(),
+            Token::LitString(str) => Some(Expression::LiteralString(*str)),
             Token::LitInt(int) => Some(Expression::LiteralInt(int.parse().unwrap())),
-            Token::LitFloat(_) => todo!(),
-            Token::LitChar(_) => todo!(),
-            Token::Ident(_) => todo!(),
+            Token::LitFloat(float) => Some(Expression::LiteralFloat(float.parse().unwrap())),
+            Token::LitChar(char) => Some(Expression::LiteralChar(char.parse().unwrap())),
+            Token::Ident(ident) => Some(Expression::Ident(*ident)),
             _ => todo!(),
         }
     }
@@ -176,7 +128,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut is_const = false;
         let mut is_volatile = false;
         let mut data_storage_class = DataStorageClass::None;
-        while self.peek_tok()? != &Token::Assign && self.peek_tok()? != &Token::Semicolon {
+        while self.peek_tok()? != &Token::Assign
+            && self.peek_tok()? != &Token::Semicolon
+            && self.peek_tok()? != &Token::LSquare
+        {
             match *self.cur_tok()? {
                 Token::Volatile => {
                     encounter_modifier!(is_volatile, "Encountered second `volatile` specification")
@@ -231,6 +186,19 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Ident(ident) => *ident,
             _ => unreachable!(),
         };
+        if let Token::LSquare = self.peek_tok()? {
+            self.next_tok();
+            let size: Option<usize> = match *self.peek_tok()? {
+                Token::LitInt(int) => {
+                    self.next_tok();
+                    Some(int.parse().unwrap())
+                }
+                _ => None,
+            };
+            let alloc = self.arena.alloc(var_type.unwrap());
+            var_type = Some(Type::Array { type_: alloc, size });
+            self.next_tok();
+        }
         self.next_tok();
         let expr = match self.cur_tok()? {
             Token::Assign => {
@@ -343,41 +311,69 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             parser_error!("Expected right parenthesis after arguments, received {tok:?} instead");
         });
         self.next_tok();
-        let stmt = Statement::Function(FunctionStmt {
-            name,
-            is_volatile,
-            should_inline,
-            data_storage_class,
-            args,
-            ret_type: ret_type?,
-            body: None,
-        });
         match self.peek_tok()? {
             Token::Semicolon => {
                 self.next_tok();
                 self.next_tok();
-                return Some(stmt)
-            },
-            Token::LCurly => todo!(),
-            tok => parser_error!("Expected semicolon or left curly brackets after function argument parenthesis, received {tok:?} instead")
+                Some(Statement::Function(FunctionStmt {
+                    name,
+                    is_volatile,
+                    should_inline,
+                    data_storage_class,
+                    args,
+                    ret_type: ret_type?,
+                    body: None,
+                }))
+            }
+            Token::LCurly => {
+                let func = Some(Statement::Function(FunctionStmt {
+                    name,
+                    is_volatile,
+                    should_inline,
+                    data_storage_class,
+                    args,
+                    ret_type: ret_type?,
+                    body: self.parse_block(),
+                }));
+                self.next_tok();
+                self.next_tok();
+                func
+            }
+            tok => {
+                parser_error!("Expected semicolon or left curly brackets after function argument parenthesis, received {tok:?} instead");
+                panic!()
+            }
         }
-        todo!()
     }
 
     /// First token needs to be the token before the first type
     fn parse_field_list(&mut self, seperator: Token<'a>, end: Token<'a>) -> Option<Vec<Field<'a>>> {
+        // TODO: Array args
         let mut fields: Vec<Field<'a>> = Vec::new();
         self.next_tok();
         // manually parse first field
         dbg!(&end);
         let field = if self.peek_tok()? != &end {
             self.next_tok();
-            let field_type = self.parse_type()?;
+            let mut field_type = self.parse_type()?;
             self.next_tok();
-            let name = match self.cur_tok()? {
+            let name = match *self.cur_tok()? {
                 Token::Ident(ident) => ident,
                 _ => todo!(),
             };
+            if let Token::LSquare = self.peek_tok()? {
+                self.next_tok();
+                let size: Option<usize> = match *self.peek_tok()? {
+                    Token::LitInt(int) => {
+                        self.next_tok();
+                        Some(int.parse().unwrap())
+                    }
+                    _ => None,
+                };
+                let alloc = self.arena.alloc(field_type);
+                field_type = Type::Array { type_: alloc, size };
+                self.next_tok();
+            }
             Field { name, field_type }
         } else {
             return Some(vec![]);
@@ -386,12 +382,25 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         while self.peek_tok()? == &seperator && self.peek_tok()? != &end {
             self.next_tok();
             self.next_tok();
-            let type_ = self.parse_type();
+            let mut type_ = self.parse_type();
             self.next_tok();
             let name = *match self.cur_tok()? {
                 Token::Ident(ident) => ident,
                 _ => todo!(),
             };
+            if let Token::LSquare = self.peek_tok()? {
+                self.next_tok();
+                let size: Option<usize> = match *self.peek_tok()? {
+                    Token::LitInt(int) => {
+                        self.next_tok();
+                        Some(int.parse().unwrap())
+                    }
+                    _ => None,
+                };
+                let alloc = self.arena.alloc(type_.unwrap());
+                type_ = Some(Type::Array { type_: alloc, size });
+                self.next_tok();
+            }
             fields.push(Field {
                 name,
                 field_type: type_?,
@@ -439,7 +448,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                                 if let Type::Pointer { is_const, .. } = &mut type_ {
                                     *is_const = true;
                                 }
-                            },
+                            }
                             _ => unreachable!(),
                         }
                     }
@@ -448,6 +457,15 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             }
             tok => panic!("Cannot parse type from token: {tok:?}"),
         }
+    }
+
+    fn parse_block(&mut self) -> Option<BlockStmt<'a>> {
+        self.next_tok();
+        if let Token::RCurly = self.peek_tok()? {
+            return Some(BlockStmt { block: vec![] });
+        }
+
+        todo!()
     }
 
     #[inline(always)]
@@ -462,7 +480,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             // Function specific keywords
             Token::Inline => todo!(),
             // Variable or function specifix keywords
-            Token::Static | Token::Extern | Token::Volatile => todo!(),
+            Token::Static | Token::Extern | Token::Volatile => self.parse_var_or_func(),
             // Expression
             tok => todo!("{tok:?}"),
         }
@@ -479,6 +497,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut peek_ahead = 2;
         loop {
             match self.lexer.tokens.get(self.tok_index + peek_ahead)? {
+                Token::LSquare => break self.parse_variable(),
                 Token::LParent => break self.parse_function(),
                 Token::Comma => todo!("multi variable"),
                 Token::Assign | Token::Semicolon => break self.parse_variable(),

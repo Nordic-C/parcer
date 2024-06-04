@@ -11,7 +11,10 @@ pub enum Type<'ast> {
         is_restricted: bool,
     },
     /// Array of a type
-    Array(&'ast Type<'ast>, usize),
+    Array {
+        type_: &'ast Type<'ast>,
+        size: Option<usize>,
+    },
     /// Struct pointer
     Struct(Ident<'ast>),
     /// Union pointer
