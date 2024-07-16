@@ -20,6 +20,15 @@ macro_rules! parser_error {
 }
 
 #[macro_export]
+macro_rules! parser_warn {
+    ($($arg:tt)+) => {{
+        use colored::Colorize;
+
+        eprintln!("{}: {}", "Parser Warn".yellow(), format_args!($($arg)+));
+    }};
+}
+
+#[macro_export]
 macro_rules! valid_var_or_func {
     () => {
         Token::Const
@@ -37,7 +46,7 @@ macro_rules! encounter_modifier {
             if !$var {
                 $var = true;
             } else {
-                parser_error!($msg);
+                parser_warn!($msg);
             }
         }
     };

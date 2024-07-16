@@ -1,6 +1,6 @@
-use crate::lexer::tokens::Token;
+use crate::{ast::types::Type, lexer::tokens::Token};
 
-use super::{Parser, Type};
+use super::Parser;
 
 impl<'a, 's: 'a> Parser<'a, 's> {
     /// First token needs to be the first token of the type

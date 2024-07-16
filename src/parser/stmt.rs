@@ -1,7 +1,18 @@
-use crate::{ast::{stmt::{CompositeDataType, DataStorageClass, Field, FunctionStmt, VariableStmt}, types::Type}, encounter_dsc_modifier, encounter_modifier, expect_tok, lexer::tokens::Token, parser_error};
+use crate::{
+    ast::{
+        stmt::{CompositeDataType, DataStorageClass, Field, FunctionStmt, VariableStmt},
+        types::Type,
+    }, encounter_dsc_modifier, encounter_modifier, expect_tok, lexer::tokens::Token, parser::expr::Precedence, parser_error, parser_warn
+};
 
 use super::{BlockStmt, Parser, Statement};
 
+/// Loop interrupters
+#[derive(Debug)]
+enum LoopInt {
+    Break,
+    Continue,
+}
 impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
         match self.cur_tok()? {
@@ -29,7 +40,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 self.parse_stmt()
             }
             Token::LCurly => self.parse_block().map(|block| Statement::Block(block)),
-            _ => self.parse_expr().map(|expr| Statement::Expression(expr)),
+            _ => self.parse_expr_stmt(),
         }
     }
 
@@ -49,10 +60,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             match *self.cur_tok()? {
                 // TODO: Allow multiple const/volatile
                 Token::Volatile => {
-                    encounter_modifier!(is_volatile, "Encountered second `volatile` specification")
+                    encounter_modifier!(is_volatile, "Encountered second `volatile` variable modifier")
                 }
                 Token::Const => {
-                    encounter_modifier!(is_const, "Encountered second `const` specification")
+                    encounter_modifier!(is_const, "Encountered second `const` variable specification")
                 }
                 Token::Auto => {
                     encounter_dsc_modifier!(data_storage_class, DataStorageClass::Auto)
@@ -118,7 +129,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let expr = match self.cur_tok()? {
             Token::Assign => {
                 self.next_tok();
-                self.parse_expr()
+                self.parse_expr(Precedence::Lowest)
             }
             Token::Semicolon => None,
             _ => todo!(),

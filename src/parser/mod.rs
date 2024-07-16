@@ -2,19 +2,12 @@ use std::collections::HashSet;
 
 use bumpalo::Bump;
 
-use crate::{ast::{expr::*, stmt::*, types::*, *}, encounter_dsc_modifier, encounter_modifier, expect_tok, lexer::{tokens::Token, Lexer}, parser_error};
+use crate::{ast::{stmt::*, *}, lexer::{tokens::Token, Lexer}};
 
 pub mod expr;
 pub mod stmt;
 pub mod types;
 mod macros;
-
-/// Loop interrupters
-#[derive(Debug)]
-enum LoopInt {
-    Break,
-    Continue,
-}
 
 pub struct Parser<'a, 's> {
     pub lexer: Lexer<'s>,
@@ -103,5 +96,9 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     #[inline(always)]
     fn reset_variables(&mut self) {
         self.variables.clear();
+    }
+
+    fn parse_call_expr(&mut self, left: crate::ast::expr::Expression<'a>) -> _ {
+        todo!()
     }
 }

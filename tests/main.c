@@ -1,1 +1,3 @@
-const const int x = 100;
+int main() {
+  
+}
