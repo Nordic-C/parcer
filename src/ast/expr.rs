@@ -13,8 +13,9 @@ pub enum Expression<'ast> {
 
     Ident(Ident<'ast>),
 
-    Infix(InfixExpr<'ast>),
     Prefix(PrefixExpr<'ast>),
+    Infix(InfixExpr<'ast>),
+    Post(PostExpr<'ast>),
 
     Call(CallExpr<'ast>)
 }

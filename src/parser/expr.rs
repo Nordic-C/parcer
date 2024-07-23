@@ -1,7 +1,9 @@
-use std::f32::INFINITY;
-
 use crate::{
-    ast::expr::{CallExpr, Expression, InOperator, InfixExpr},
+    ast::expr::{
+        CallExpr, Expression, InOperator, InfixExpr, PostExpr, PostOperator, PreOperator,
+        PrefixExpr,
+    },
+    expect_tok,
     lexer::tokens::Token,
     parser_error,
 };
@@ -32,9 +34,8 @@ pub(super) enum Precedence {
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(super) enum PrecedencePos {
-    Prefix,
-    Infix,
-    Postfix,
+    Pre,
+    Post,
 }
 
 impl<'a, 's: 'a> Parser<'a, 's> {
@@ -44,7 +45,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut left_expression = prefix;
 
         while !self.peek_is_end()
-            && prec < self.get_precedence(self.peek_tok()?, PrecedencePos::Infix)
+            && prec < self.get_precedence(self.peek_tok()?, PrecedencePos::Post)
         {
             self.next_tok();
             left_expression = self.parse_infix(left_expression?);
@@ -59,23 +60,19 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::LitInt(int) => Some(Expression::LiteralInt(int.parse().unwrap())),
             Token::LitFloat(float) => Some(Expression::LiteralFloat(float.parse().unwrap())),
             Token::LitChar(char) => Some(Expression::LiteralChar(char.parse().unwrap())),
-            Token::Ident(ident) => {
-                let id = Some(Expression::Ident(*ident));
-                dbg!(&id);
-                id
-            }
-            Token::Sizeof => todo!(),
-            Token::ExclamMark => todo!(),
+            Token::Ident(ident) => Some(Expression::Ident(*ident)),
             Token::BOr => todo!(),
             Token::XOr => todo!(),
-            Token::Not => todo!(),
-            Token::Plus => todo!(),
-            Token::Minus => todo!(),
-            Token::Increment => todo!(),
-            Token::Decrement => todo!(),
-            Token::Ampersand => todo!(),
-            Token::Asterisk => todo!(),
-            Token::LParent => todo!(),
+            Token::BNot
+            | Token::Sizeof
+            | Token::ExclamMark
+            | Token::Plus
+            | Token::Asterisk
+            | Token::Ampersand
+            | Token::LParent
+            | Token::Increment
+            | Token::Decrement
+            | Token::Minus => self.parse_prefix_expr(),
             tok => {
                 parser_error!("Cannot parse expression or statement from: {tok:?}");
                 panic!()
@@ -84,8 +81,8 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     fn parse_call_expr(&mut self, left: Expression<'a>) -> Option<CallExpr<'a>> {
-        dbg!("Parse call!");
         let args = self.parse_call_args()?;
+        self.next_tok();
         Some(CallExpr {
             val: self.arena.alloc(left),
             args,
@@ -103,13 +100,21 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             }
             Token::LParent => Some(Expression::Call(self.parse_call_expr(left_expr)?)),
             // Token::LSquare => self.parse_index_expr(left),
+            Token::Increment => Some(Expression::Post(PostExpr {
+                val: self.arena.alloc(left_expr),
+                op: PostOperator::Incr,
+            })),
+            Token::Decrement => Some(Expression::Post(PostExpr {
+                val: self.arena.alloc(left_expr),
+                op: PostOperator::Decr,
+            })),
             _ => panic!("Invalid for parsing an infix expr: {:#?}", left_expr),
         }
     }
 
     fn parse_infix_expr(&mut self, left_expr: Expression<'a>) -> Option<Expression<'a>> {
         let op = Self::tok_to_in_op(self.cur_tok()?)?;
-        let prec = self.get_precedence(self.cur_tok()?, PrecedencePos::Infix);
+        let prec = self.get_precedence(self.cur_tok()?, PrecedencePos::Post);
         self.next_tok();
         let right_expr = self.parse_expr(prec)?;
         Some(Expression::Infix(InfixExpr {
@@ -117,6 +122,59 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             right: self.arena.alloc(right_expr),
             op,
         }))
+    }
+
+    fn parse_prefix_expr(&mut self) -> Option<Expression<'a>> {
+        let op = match self.cur_tok()? {
+            Token::Plus => PreOperator::Pos,
+            Token::Minus => PreOperator::Neg,
+            Token::ExclamMark => PreOperator::Not,
+            Token::BNot => PreOperator::BNot,
+            Token::Asterisk => PreOperator::Deref,
+            //Token::Sizeof => self.parse_sizeof_expr(),
+            Token::Ampersand => PreOperator::AddrOf,
+            // AlignOf
+            Token::LParent => self.parse_cast_expr()?,
+            Token::Increment => PreOperator::Incr,
+            Token::Decrement => PreOperator::Decr,
+            other => panic!("Expected operator, got: {other:?} instead"),
+        };
+        self.next_tok();
+        let val = self.arena.alloc(self.parse_expr(Precedence::Prefix)?);
+        Some(Expression::Prefix(PrefixExpr { op, val }))
+    }
+
+    /// Cur token is a left parenthesis
+    fn parse_cast_expr(&mut self) -> Option<PreOperator<'a>> {
+        self.next_tok();
+        let _type = self.parse_type()?;
+        if expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
+            parser_error!(
+                "Expected right parenthesis after type for cast, received token: {:#?} instead",
+                tok
+            )
+        }) {
+            self.next_tok();
+        }
+        Some(PreOperator::Cast(_type))
+    }
+
+    /// Cur token is the sizeof keyword
+    fn parse_sizeof_expr(&mut self) -> Option<PreOperator<'a>> {
+        let uses_parents = matches!(self.peek_tok()?, Token::LParent);
+        if uses_parents {
+            self.next_tok();
+        }
+        let _type = self.parse_type()?;
+        if expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
+            parser_error!(
+                "Expected right parenthesis after type for cast, received token: {:#?} instead",
+                tok
+            )
+        }) {
+            self.next_tok();
+        }
+        Some(PreOperator::Cast(_type))
     }
 
     fn tok_to_in_op(tok: &Token) -> Option<InOperator> {
@@ -156,12 +214,12 @@ impl<'a, 's: 'a> Parser<'a, 's> {
 
     fn get_precedence(&self, token: &Token<'a>, pos: PrecedencePos) -> Precedence {
         match pos {
-            PrecedencePos::Prefix => match token {
-                Token::Increment | Token::Decrement | Token::Plus| Token::Minus | Token::ExclamMark | Token::Not | Token::LParent | Token::Asterisk | Token::Ampersand | Token::Sizeof /* | _Alignof */  => Precedence::Prefix,
+            PrecedencePos::Pre => match token {
+                Token::Increment | Token::Decrement | Token::Plus| Token::Minus | Token::ExclamMark | Token::BNot | Token::LParent | Token::Asterisk | Token::Ampersand | Token::Sizeof /* | _Alignof */  => Precedence::Prefix,
                 Token::Comma => Precedence::Comma,
                 _ => Precedence::Lowest,
             },
-            PrecedencePos::Infix => match token {
+            PrecedencePos::Post => match token {
                 Token::Asterisk | Token::Divide | Token::Mod => Precedence::Mul,
                 Token::Plus | Token::Minus => Precedence::Add,
                 Token::GreaterThan | Token::GTEquals | Token::LessThan | Token::LTEquals => {
@@ -185,10 +243,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 | Token::AssignBAnd
                 | Token::AssignXor
                 | Token::AssignBOr => Precedence::Assign,
-                Token::Comma => Precedence::Comma,
-                _ => Precedence::Lowest,
-            },
-            PrecedencePos::Postfix => match token {
                 Token::Increment
                 | Token::Decrement
                 | Token::LParent

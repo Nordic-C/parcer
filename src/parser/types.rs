@@ -13,15 +13,31 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Union => todo!(),
             Token::Ident(ident) => {
                 let mut type_ = Type::Ident(ident);
-                while let Token::Asterisk = self.peek_tok()? {
+                // try using single while loop for this
+                while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
                     // Restrict and const
                     self.next_tok();
-                    let type_ref = self.arena.alloc(type_);
-                    type_ = Type::Pointer {
-                        type_: type_ref,
-                        is_const: false,
-                        is_restricted: false,
-                    };
+                    match self.peek_tok()? {
+                        Token::Asterisk => {
+                            let type_ref = self.arena.alloc(type_);
+                            type_ = Type::Pointer {
+                                type_: type_ref,
+                                is_const: false,
+                                is_restricted: false,
+                            }
+                        }
+                        Token::Restrict => {
+                            if let Type::Pointer { is_restricted, .. } = &mut type_ {
+                                *is_restricted = true;
+                            }
+                        }
+                        Token::Const => {
+                            if let Type::Pointer { is_const, .. } = &mut type_ {
+                                *is_const = true;
+                            }
+                        }
+                        _ => todo!(),
+                    }
                     while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
                         self.next_tok();
                         match self.cur_tok()? {

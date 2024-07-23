@@ -1,7 +1,1 @@
-void test() {
-    
-}
-
-int main() {
-    test();    
-}
+int main() { int x = (int const const *)100; }

@@ -52,8 +52,13 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     pub(super) fn parse_expr_stmt(&mut self) -> Option<Statement<'a>> {
-        self.parse_expr(Precedence::Lowest)
-            .map(|expr| Statement::Expression(expr))
+        let expr = self.parse_expr(Precedence::Lowest);
+        if expect_tok!(self.peek_tok()?, Token::Semicolon, |tok| {
+            parser_error!("Expected semicolon after expression statement, received token: {tok:?} instead");
+        }) {
+            self.next_tok();
+        }
+        expr.map(|expr| Statement::Expression(expr))
     }
 
     pub(super) fn parse_variable(&mut self) -> Option<Statement<'a>> {

@@ -147,7 +147,7 @@ pub enum Token<'a> {
     XOr,
     /// Symbol: ~
     #[token("~")]
-    Not,
+    BNot,
     /// Symbol: <<
     #[token("<<")]
     LeftShift,
