@@ -2,7 +2,11 @@ use crate::{
     ast::{
         stmt::{CompositeDataType, DataStorageClass, Field, FunctionStmt, VariableStmt},
         types::Type,
-    }, encounter_dsc_modifier, encounter_modifier, expect_tok, lexer::tokens::Token, parser::expr::Precedence, parser_error, parser_warn
+    },
+    encounter_dsc_modifier, encounter_modifier, expect_tok,
+    lexer::tokens::Token,
+    parser::expr::Precedence,
+    parser_error, parser_warn,
 };
 
 use super::{BlockStmt, Parser, Statement};
@@ -13,6 +17,7 @@ enum LoopInt {
     Break,
     Continue,
 }
+
 impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
         match self.cur_tok()? {
@@ -39,9 +44,16 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 self.next_tok();
                 self.parse_stmt()
             }
-            Token::LCurly => self.parse_block().map(|block| Statement::Block(block)),
+            Token::LCurly => self
+                .parse_block(Token::RCurly)
+                .map(|block| Statement::Block(block)),
             _ => self.parse_expr_stmt(),
         }
+    }
+
+    pub(super) fn parse_expr_stmt(&mut self) -> Option<Statement<'a>> {
+        self.parse_expr(Precedence::Lowest)
+            .map(|expr| Statement::Expression(expr))
     }
 
     pub(super) fn parse_variable(&mut self) -> Option<Statement<'a>> {
@@ -60,10 +72,16 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             match *self.cur_tok()? {
                 // TODO: Allow multiple const/volatile
                 Token::Volatile => {
-                    encounter_modifier!(is_volatile, "Encountered second `volatile` variable modifier")
+                    encounter_modifier!(
+                        is_volatile,
+                        "Encountered second `volatile` variable modifier"
+                    )
                 }
                 Token::Const => {
-                    encounter_modifier!(is_const, "Encountered second `const` variable specification")
+                    encounter_modifier!(
+                        is_const,
+                        "Encountered second `const` variable specification"
+                    )
                 }
                 Token::Auto => {
                     encounter_dsc_modifier!(data_storage_class, DataStorageClass::Auto)
@@ -134,15 +152,14 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Semicolon => None,
             _ => todo!(),
         };
-        expect_tok!(self.peek_tok()?, Token::Semicolon, |tok| {
+        if expect_tok!(self.peek_tok()?, Token::Semicolon, |tok| {
             parser_error!(
                 "Expected semicolon after variable definition, received: {tok:?} instead"
             );
-        });
-        // go to semicolon
-        self.next_tok();
-        // go to token after semicolon
-        self.next_tok();
+        }) {
+            // go to semicolon
+            self.next_tok();
+        };
         Some(Statement::Variable(VariableStmt {
             name,
             is_volatile,
@@ -154,7 +171,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     pub(super) fn parse_function(&mut self) -> Option<Statement<'a>> {
-        dbg!("Parsing function");
         let mut ret_type = if let Token::Ident(ident) = self.cur_tok()? {
             Some(Type::Ident(&ident))
         } else {
@@ -163,7 +179,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut should_inline = false;
         let mut is_volatile = false;
         let mut data_storage_class = DataStorageClass::None;
-        while self.peek_tok()? != &Token::LParent {
+        while *self.peek_tok()? != Token::LParent {
             match *self.cur_tok()? {
                 Token::Volatile => {
                     encounter_modifier!(is_volatile, "Encountered second `volatile` specification")
@@ -239,6 +255,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 }))
             }
             Token::LCurly => {
+                self.next_tok();
                 let func = Some(Statement::Function(FunctionStmt {
                     name,
                     is_volatile,
@@ -246,7 +263,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     data_storage_class,
                     args,
                     ret_type: ret_type?,
-                    body: self.parse_block(),
+                    body: self.parse_block(Token::RCurly),
                 }));
                 self.next_tok();
                 self.next_tok();
@@ -264,7 +281,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         let mut fields: Vec<Field<'a>> = Vec::new();
         self.next_tok();
         // manually parse first field
-        dbg!(&end);
         let field = if self.peek_tok()? != &end {
             self.next_tok();
             let mut field_type = self.parse_type()?;
@@ -321,13 +337,18 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         Some(fields)
     }
 
-    fn parse_block(&mut self) -> Option<BlockStmt<'a>> {
+    fn parse_block(&mut self, end: Token) -> Option<BlockStmt<'a>> {
+        let mut block = Vec::new();
         self.next_tok();
-        if let Token::RCurly = self.peek_tok()? {
-            return Some(BlockStmt { block: vec![] });
+        while self.cur_tok() != Some(&end) {
+            block.push(match self.parse_stmt() {
+                Some(stmt) => stmt,
+                None => break,
+            });
+            self.next_tok();
         }
 
-        todo!()
+        Some(BlockStmt { block: block })
     }
 
     fn encounter_cdt_pointer(&mut self, _type: CompositeDataType) -> Option<Type<'a>> {

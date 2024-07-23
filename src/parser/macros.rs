@@ -29,7 +29,7 @@ macro_rules! parser_warn {
 }
 
 #[macro_export]
-macro_rules! valid_var_or_func {
+macro_rules! valid_var_or_func_mod {
     () => {
         Token::Const
             | Token::Static
