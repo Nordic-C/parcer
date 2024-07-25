@@ -15,54 +15,29 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 let mut type_ = Type::Ident(ident);
                 // parse pointer
 
-                // try using single while loop for this
-                while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
-                    // Restrict and const
-                    self.next_tok();
+                let mut ptr_const = false;
+                let mut ptr_restrict = false;
+
+                loop {
                     match self.peek_tok()? {
+                        Token::Const => match &mut type_ {
+                            Type::Pointer { is_const, .. } => *is_const = true,
+                            _ => ptr_const = true,
+                        },
+                        Token::Restrict => match &mut type_ {
+                            Type::Pointer { is_restricted, .. } => *is_restricted = true,
+                            _ => ptr_restrict = true,
+                        },
                         Token::Asterisk => {
-                            let type_ref = self.arena.alloc(type_);
                             type_ = Type::Pointer {
-                                type_: type_ref,
-                                is_const: false,
-                                is_restricted: false,
-                            }
-                        }
-                        Token::Restrict => {
-                            if let Type::Pointer { is_restricted, .. } = &mut type_ {
-                                *is_restricted = true;
-                            }
-                        }
-                        Token::Const => {
-                            if let Type::Pointer { is_const, .. } = &mut type_ {
-                                *is_const = true;
+                                type_: self.arena.alloc(type_),
+                                is_const: ptr_const,
+                                is_restricted: ptr_restrict,
                             }
                         }
                         _ => break,
                     }
-                    while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
-                        self.next_tok();
-                        match self.cur_tok()? {
-                            Token::Asterisk => {
-                                type_ = Type::Pointer {
-                                    type_: self.arena.alloc(type_),
-                                    is_const: false,
-                                    is_restricted: false,
-                                }
-                            }
-                            Token::Restrict => {
-                                if let Type::Pointer { is_restricted, .. } = &mut type_ {
-                                    *is_restricted = true;
-                                }
-                            }
-                            Token::Const => {
-                                if let Type::Pointer { is_const, .. } = &mut type_ {
-                                    *is_const = true;
-                                }
-                            }
-                            _ => unreachable!(),
-                        }
-                    }
+                    self.next_tok();
                 }
                 Some(type_)
             }
