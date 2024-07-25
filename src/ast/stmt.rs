@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::{types::Type, expr::Expression, Ident};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -170,4 +172,14 @@ pub enum CompositeDataType {
     Struct,
     Union,
     Enum,
+}
+
+impl Display for CompositeDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            CompositeDataType::Struct => "struct",
+            CompositeDataType::Union => "union",
+            CompositeDataType::Enum => "enum",
+        })
+    }
 }

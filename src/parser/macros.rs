@@ -31,37 +31,31 @@ macro_rules! parser_warn {
 #[macro_export]
 macro_rules! valid_var_or_func_mod {
     () => {
-        Token::Const
-            | Token::Static
-            | Token::Register
-            | Token::Inline
-            | Token::Volatile
+        Token::Const | Token::Static | Token::Register | Token::Inline | Token::Volatile
     };
 }
 
 #[macro_export]
 macro_rules! encounter_modifier {
-    ($var:expr,$msg:expr) => {
-        {
-            if !$var {
-                $var = true;
-            } else {
-                parser_warn!($msg);
-            }
+    ($var:expr,$msg:expr) => {{
+        if !$var {
+            $var = true;
+        } else {
+            parser_warn!($msg);
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! encounter_dsc_modifier {
-    ($var:expr,$class:expr) => {
-        {
-            if let DataStorageClass::None = $var {
-                $var = $class;
-            } else {
-                parser_error!("Encountered second data storage class specifier: {:?}", $class);
-            }
+    ($var:expr,$class:expr) => {{
+        if let DataStorageClass::None = $var {
+            $var = $class;
+        } else {
+            parser_error!(
+                "Encountered second data storage class specifier: {:?}",
+                $class
+            );
         }
-    };
+    }};
 }
-

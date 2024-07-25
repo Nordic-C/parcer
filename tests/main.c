@@ -1,5 +1,5 @@
 int main() {
   printf("%s", "a", 5);
   int x = 100;
-  int *y = (char const*) &x;
+  int *y = (struct Test *) &x;
 }

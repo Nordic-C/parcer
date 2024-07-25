@@ -162,6 +162,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     fn parse_cast_expr(&mut self) -> Option<PreOperator<'a>> {
         self.next_tok();
         let _type = self.parse_type()?;
+        self.next_tok();
         if expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
             parser_error!(
                 "Expected right parenthesis after type for cast, received token: {:#?} instead",
