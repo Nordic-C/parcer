@@ -13,6 +13,8 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Union => todo!(),
             Token::Ident(ident) => {
                 let mut type_ = Type::Ident(ident);
+                // parse pointer
+
                 // try using single while loop for this
                 while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
                     // Restrict and const
@@ -36,7 +38,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                                 *is_const = true;
                             }
                         }
-                        _ => todo!(),
+                        _ => break,
                     }
                     while let Token::Asterisk | Token::Restrict | Token::Const = self.peek_tok()? {
                         self.next_tok();

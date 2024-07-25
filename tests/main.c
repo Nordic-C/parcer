@@ -1,1 +1,5 @@
-int main() { int x = (int const const *)100; }
+int main() {
+  printf("%s", "a", 5);
+  int x = 100;
+  int *y = (char *) &x;
+}

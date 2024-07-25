@@ -89,8 +89,22 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         })
     }
 
-    fn parse_call_args(&self) -> Option<Vec<Expression<'a>>> {
-        vec![].into()
+    fn parse_call_args(&mut self) -> Option<Vec<Expression<'a>>> {
+        let mut args = Vec::new();
+        loop {
+            self.next_tok();
+            let expr = self.parse_expr(Precedence::Lowest)?;
+            args.push(expr);
+            match self.peek_tok()? {
+                Token::Comma => {
+                    self.next_tok();
+                }
+                Token::RParent => return Some(args),
+                tok => parser_error!(
+                    "Encountered invalid token after function call parameter: {tok:?}"
+                ),
+            }
+        }
     }
 
     fn parse_infix(&mut self, left_expr: Expression<'a>) -> Option<Expression<'a>> {
@@ -216,7 +230,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         match pos {
             PrecedencePos::Pre => match token {
                 Token::Increment | Token::Decrement | Token::Plus| Token::Minus | Token::ExclamMark | Token::BNot | Token::LParent | Token::Asterisk | Token::Ampersand | Token::Sizeof /* | _Alignof */  => Precedence::Prefix,
-                Token::Comma => Precedence::Comma,
                 _ => Precedence::Lowest,
             },
             PrecedencePos::Post => match token {
@@ -249,7 +262,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 | Token::LSquare
                 | Token::Dot
                 | Token::Arrow => Precedence::Postfix,
-                Token::Comma => Precedence::Comma,
                 _ => Precedence::Lowest,
             },
         }
