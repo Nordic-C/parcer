@@ -32,9 +32,6 @@ mod tests {
         let parse_arena = Bump::new();
         let mut parser = Parser::new(lexer, &parse_arena);
         let stmts = parser.parse();
-        for stmt in stmts {
-            println!("stmt: {stmt}");
-        }
     }
 
 }
