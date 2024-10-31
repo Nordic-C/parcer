@@ -170,7 +170,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             is_volatile,
             is_const,
             data_storage_class,
-            _type: var_type?,
+            type_: var_type?,
             val: expr,
         }))
     }
@@ -303,8 +303,8 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     }
                     _ => None,
                 };
-                let alloc = self.arena.alloc(field_type);
-                field_type = Type::Array { type_: alloc, size };
+                let type_ = self.arena.alloc(field_type);
+                field_type = Type::Array { type_, size };
                 self.next_tok();
             }
             Field { name, field_type }

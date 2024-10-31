@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     ast::expr::{
         CallExpr, Expression, InOperator, InfixExpr, PostExpr, PostOperator, PreOperator,

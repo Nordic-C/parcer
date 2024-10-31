@@ -76,7 +76,7 @@ pub struct VariableStmt<'ast> {
     pub is_volatile: bool,
     pub is_const: bool,
     pub data_storage_class: DataStorageClass,
-    pub _type: Type<'ast>,
+    pub type_: Type<'ast>,
     pub val: Option<Expression<'ast>>,
 }
 
@@ -125,7 +125,7 @@ pub struct ForStmt {}
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypedefStmt<'ast> {
     pub name: Ident<'ast>,
-    pub _type: &'ast Statement<'ast>,
+    pub type_: &'ast Statement<'ast>,
 }
 
 #[derive(Debug, PartialEq, Clone)]

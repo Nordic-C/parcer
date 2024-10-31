@@ -24,4 +24,17 @@ mod tests {
         let stmts = parser.parse();
         dbg!(stmts);
     }
+
+    #[test]
+    fn test_src_code_reconstruction() {
+        let file_content = fs::read_to_string(TESTS_PATH).unwrap();
+        let lexer = Lexer::new(&file_content);
+        let parse_arena = Bump::new();
+        let mut parser = Parser::new(lexer, &parse_arena);
+        let stmts = parser.parse();
+        for stmt in stmts {
+            println!("stmt: {stmt}");
+        }
+    }
+
 }

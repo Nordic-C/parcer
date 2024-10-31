@@ -1,5 +1,3 @@
-int main() {
-  printf("%s", "a", 5);
-  int x = 100;
-  int *y = (struct Test *) &x;
+int main(int argc, char **argv) {
+    char *x = "ABC";
 }
