@@ -1,3 +1,5 @@
+use crate::{expect_tok, lexer::tokens::Token, parser::Parser, parser_error};
+
 use super::{types::Type, Ident};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -17,7 +19,7 @@ pub enum Expression<'ast> {
     Infix(InfixExpr<'ast>),
     Post(PostExpr<'ast>),
 
-    Call(CallExpr<'ast>)
+    Call(CallExpr<'ast>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -58,6 +60,29 @@ pub enum PreOperator<'ast> {
     Cast(Type<'ast>),
     Incr,
     Decr,
+}
+
+impl<'op, 'a, 's> PreOperator<'op> {
+    /// Cur token is the expr
+    pub(crate) fn end_expr(&self, parser: &mut Parser<'a, 's>)
+    where
+        's: 'a,
+    {
+        if let PreOperator::SizeOf = self {
+            if let Some(peek_tok) = parser.peek_tok() {
+                if expect_tok!(peek_tok, &Token::RParent, |tok| {
+                    parser_error!(
+                        "Expected closin parenthsis after sizeof(...), received: {:#?}",
+                        tok
+                    )
+                }) {
+                    parser.next_tok();
+                }
+            } else {
+                parser_error!("Expected closing parenthesis after sizeof(...) received None")
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

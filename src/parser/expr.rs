@@ -147,7 +147,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::ExclamMark => PreOperator::Not,
             Token::BNot => PreOperator::BNot,
             Token::Asterisk => PreOperator::Deref,
-            //Token::Sizeof => self.parse_sizeof_expr(),
+            Token::Sizeof => self.parse_sizeof_expr()?,
             Token::Ampersand => PreOperator::AddrOf,
             // AlignOf
             Token::LParent => self.parse_cast_expr()?,
@@ -157,7 +157,14 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         };
         self.next_tok();
         let val = self.arena.alloc(self.parse_expr(Precedence::Prefix)?);
+        op.end_expr(self);
         Some(Expression::Prefix(PrefixExpr { op, val }))
+    }
+
+    // Cur token is sizeof keyword
+    fn parse_sizeof_expr(&mut self) -> Option<PreOperator<'a>> {
+        self.next_tok();
+        Some(PreOperator::SizeOf)
     }
 
     /// Cur token is a left parenthesis
@@ -165,24 +172,6 @@ impl<'a, 's: 'a> Parser<'a, 's> {
         self.next_tok();
         let _type = self.parse_type()?;
         self.next_tok();
-        if expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
-            parser_error!(
-                "Expected right parenthesis after type for cast, received token: {:#?} instead",
-                tok
-            )
-        }) {
-            self.next_tok();
-        }
-        Some(PreOperator::Cast(_type))
-    }
-
-    /// Cur token is the sizeof keyword
-    fn parse_sizeof_expr(&mut self) -> Option<PreOperator<'a>> {
-        let uses_parents = matches!(self.peek_tok()?, Token::LParent);
-        if uses_parents {
-            self.next_tok();
-        }
-        let _type = self.parse_type()?;
         if expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
             parser_error!(
                 "Expected right parenthesis after type for cast, received token: {:#?} instead",

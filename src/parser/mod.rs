@@ -74,17 +74,17 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     }
 
     #[inline(always)]
-    fn cur_tok(&self) -> Option<&Token<'a>> {
+    pub(crate) fn cur_tok(&self) -> Option<&Token<'a>> {
         self.lexer.tokens.get(self.tok_index)
     }
 
     #[inline(always)]
-    fn peek_tok(&self) -> Option<&Token<'a>> {
+    pub(crate) fn peek_tok(&self) -> Option<&Token<'a>> {
         self.lexer.tokens.get(self.tok_index + 1)
     }
 
     #[inline(always)]
-    fn next_tok(&mut self) {
+    pub(crate) fn next_tok(&mut self) {
         self.tok_index += 1;
     }
 

@@ -1,3 +1,3 @@
 int main(int argc, char **argv) {
-    char *x = "ABC";
+    char *x = sizeof(100);
 }
