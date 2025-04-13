@@ -21,7 +21,7 @@ pub enum Statement<'ast> {
     // Loops
     While(WhileStmt<'ast>),
     DoWhile(DoWhileStmt<'ast>),
-    For(ForStmt),
+    For(ForStmt<'ast>),
 
     Typedef(TypedefStmt<'ast>),
 
@@ -66,7 +66,7 @@ pub struct FunctionStmt<'ast> {
     pub should_inline: bool,
     pub data_storage_class: DataStorageClass,
     pub args: Vec<Field<'ast>>,
-    pub ret_type: Type<'ast>,
+    pub ret_data_type: Type<'ast>,
     pub body: Option<BlockStmt<'ast>>,
 }
 
@@ -76,7 +76,7 @@ pub struct VariableStmt<'ast> {
     pub is_volatile: bool,
     pub is_const: bool,
     pub data_storage_class: DataStorageClass,
-    pub type_: Type<'ast>,
+    pub data_type: Type<'ast>,
     pub val: Option<Expression<'ast>>,
 }
 
@@ -120,12 +120,17 @@ pub struct DoWhileStmt<'ast> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ForStmt {}
+pub struct ForStmt<'ast> {
+    pub init_stmt: &'ast Statement<'ast>,
+    pub comp_expr: Expression<'ast>,
+    pub update_stmt: &'ast Statement<'ast>,
+    pub block: BlockStmt<'ast>,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypedefStmt<'ast> {
     pub name: Ident<'ast>,
-    pub type_: &'ast Statement<'ast>,
+    pub data_type: &'ast Statement<'ast>,
 }
 
 #[derive(Debug, PartialEq, Clone)]

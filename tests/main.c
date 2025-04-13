@@ -1,3 +1,5 @@
 int main(int argc, char **argv) {
-    char *x = sizeof(100);
+    while (0) {
+        int x = 100;
+    }
 }

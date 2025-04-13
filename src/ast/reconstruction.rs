@@ -36,7 +36,7 @@ impl Display for FunctionStmt<'_> {
         write!(
             f,
             "{ret_type} {func_name}({args}) {block}",
-            ret_type = self.ret_type,
+            ret_type = self.ret_data_type,
             func_name = self.name,
             args = args_to_string(&self.args),
             block = body_to_string(self.body.as_ref().unwrap()),
@@ -79,7 +79,7 @@ impl Display for Type<'_> {
         match self {
             Type::Ident(id) => f.write_str(id),
             Type::Pointer {
-                type_,
+                data_type: type_,
                 is_const,
                 is_restricted,
             } => write!(
@@ -88,7 +88,7 @@ impl Display for Type<'_> {
                 if *is_const { " const" } else { "" },
                 if *is_restricted { " restrict" } else { "" }
             ),
-            Type::Array { type_, size } => write!(
+            Type::Array { data_type: type_, size } => write!(
                 f,
                 "{type_}[{}]",
                 if let Some(size) = size {
@@ -161,6 +161,6 @@ impl Display for InfixExpr<'_> {
 
 impl Display for VariableStmt<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} = {};", self.type_, self.name, self.val.as_ref().unwrap())
+        write!(f, "{} {} = {};", self.data_type, self.name, self.val.as_ref().unwrap())
     }
 }

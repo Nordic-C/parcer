@@ -1,6 +1,9 @@
 use crate::{
     ast::{
-        stmt::{CompositeDataType, DataStorageClass, Field, FunctionStmt, VariableStmt},
+        stmt::{
+            CompositeDataType, DataStorageClass, Field, ForStmt, FunctionStmt, IfStmt, IfType,
+            VariableStmt, WhileStmt,
+        },
         types::Type,
     },
     encounter_dsc_modifier, encounter_modifier, expect_tok,
@@ -10,13 +13,6 @@ use crate::{
 };
 
 use super::{BlockStmt, Parser, Statement};
-
-/// Loop interrupters
-#[derive(Debug)]
-enum LoopInt {
-    Break,
-    Continue,
-}
 
 impl<'a, 's: 'a> Parser<'a, 's> {
     pub fn parse_stmt(&mut self) -> Option<Statement<'a>> {
@@ -34,10 +30,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             Token::Enum => todo!(),
             Token::Struct => self.parse_var_or_func(),
             Token::Union => todo!(),
-            Token::If => todo!(),
+            Token::If => self.parse_if(IfType::If),
             Token::Do => todo!(),
-            Token::For => todo!(),
-            Token::While => todo!(),
+            Token::For => self.parse_for(),
+            Token::While => self.parse_while(),
             Token::Switch => todo!(),
             Token::Typedef => todo!(),
             Token::Semicolon => {
@@ -54,11 +50,153 @@ impl<'a, 's: 'a> Parser<'a, 's> {
     pub(super) fn parse_expr_stmt(&mut self) -> Option<Statement<'a>> {
         let expr = self.parse_expr(Precedence::Lowest);
         if expect_tok!(self.peek_tok()?, Token::Semicolon, |tok| {
-            parser_error!("Expected semicolon after expression statement, received token: {tok:?} instead");
+            parser_error!(
+                "Expected semicolon after expression statement, received token: {tok:?} instead"
+            );
         }) {
             self.next_tok();
         }
         expr.map(|expr| Statement::Expression(expr))
+    }
+
+    fn parse_while(&mut self) -> Option<Statement<'a>> {
+        expect_tok!(self.peek_tok()?, Token::LParent, |tok| {
+            parser_error!(
+                "Expected Left Parenthesis after `while` keyword, received {tok:#?} instead"
+            )
+        });
+        // Skip While
+        self.next_tok();
+        // Skip Left Parenthesis
+        self.next_tok();
+        let cond = self.parse_expr(Precedence::Lowest)?;
+        expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
+            parser_error!(
+                "Expected Right Parenthesis after while condition, received {tok:#?} instead"
+            )
+        });
+        // Skip Right Parenthesis
+        self.next_tok();
+        expect_tok!(self.peek_tok()?, Token::LCurly, |tok| {
+            parser_error!("Expected Left Curly Brackets after Right Parenthesis of for loop condition, received {tok:#?} instead")
+        });
+        // Skip Left Curly Brackets
+        self.next_tok();
+        let block = self.parse_block(Token::RCurly)?;
+        Some(Statement::While(WhileStmt {
+            cond,
+            block,
+        }))
+    }
+
+    fn parse_for(&mut self) -> Option<Statement<'a>> {
+        expect_tok!(self.peek_tok()?, Token::LParent, |tok| {
+            parser_error!(
+                "Expected Left Parenthesis after `for` keyword, received {tok:#?} instead"
+            )
+        });
+        // Skip For
+        self.next_tok();
+        // Skip Left Parenthesis
+        self.next_tok();
+        let init_stmt = self.parse_stmt()?;
+        expect_tok!(self.cur_tok()?, Token::Semicolon, |tok| {
+            parser_error!("Expected semicolon after the init statement, received {tok:#?} instead")
+        });
+        // Skip semicolon
+        self.next_tok();
+        let comp_expr = self.parse_expr(Precedence::Lowest)?;
+        expect_tok!(self.cur_tok()?, Token::Semicolon, |tok| {
+            parser_error!(
+                "Expected semicolon after the comparison expression, received {tok:#?} instead"
+            )
+        });
+        self.next_tok();
+        let update_stmt = self.parse_stmt()?;
+        expect_tok!(self.cur_tok()?, Token::Semicolon, |tok| {
+            parser_error!(
+                "Expected semicolon after the update statement, received {tok:#?} instead"
+            )
+        });
+        self.next_tok();
+        expect_tok!(self.cur_tok()?, Token::RParent, |tok| {
+            parser_error!("Expected Right Parenthesis after the update statement of the for loop, received {tok:#?} instead")
+        });
+        expect_tok!(self.peek_tok()?, Token::LCurly, |tok| {
+            parser_error!("Expected Left Curly Brackets after the for loop's control expression, received {tok:#?} instead")
+        });
+        self.next_tok();
+        let block = self.parse_block(Token::RCurly)?;
+        Some(Statement::For(ForStmt {
+            init_stmt: self.arena.alloc(init_stmt),
+            comp_expr,
+            update_stmt: self.arena.alloc(update_stmt),
+            block,
+        }))
+    }
+
+    fn parse_if(&mut self, if_type: IfType) -> Option<Statement<'a>> {
+        let cond = if if_type != IfType::Else {
+            if if_type == IfType::ElseIf {
+                self.next_tok();
+            }
+
+            expect_tok!(self.peek_tok()?, Token::LParent, |tok| {
+                parser_error!(
+                    "Expected Left Parenthesis after `if` keyword, received {tok:#?} instead"
+                )
+            });
+            // Skip If keyword
+            self.next_tok();
+            // Skip Left Parenthesis
+            self.next_tok();
+            let cond = self.parse_expr(Precedence::Lowest);
+            expect_tok!(self.peek_tok()?, Token::RParent, |tok| {
+                parser_error!("Expected Right Parenthesis after condition of if statement, received {tok:#?} instead")
+            });
+            // Skip Right Parenthesis
+            self.next_tok();
+            cond
+        } else {
+            None
+        };
+
+        let block = if expect_tok!(self.peek_tok()?, Token::LCurly) {
+            self.next_tok();
+            self.parse_block(Token::RCurly)?
+        } else {
+            // Single line if statement
+            // FIXME: This does not work yet
+            self.next_tok();
+            BlockStmt {
+                block: vec![Statement::Expression(self.parse_expr(Precedence::Lowest)?)],
+            }
+        };
+
+        let alt = if expect_tok!(self.peek_tok()?, Token::Else) {
+            self.next_tok();
+            let if_stmt = self.parse_if(if expect_tok!(self.peek_tok()?, Token::If) {
+                IfType::ElseIf
+            } else {
+                IfType::Else
+            });
+            match if_stmt {
+                Some(Statement::If(if_stmt @ IfStmt { .. })) => Some(self.arena.alloc(if_stmt)),
+                None => None,
+                _ => unreachable!(),
+            }
+        } else {
+            None
+        };
+        Some(Statement::If(IfStmt {
+            if_type,
+            cond,
+            block,
+            alt: match alt {
+                Some(alt) => Some(alt),
+                None => None,
+            },
+        }))
     }
 
     pub(super) fn parse_variable(&mut self) -> Option<Statement<'a>> {
@@ -113,7 +251,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                         self.next_tok();
                     }
                     var_type = Some(Type::Pointer {
-                        type_: type_ref,
+                        data_type: type_ref,
                         is_const,
                         is_restricted,
                     });
@@ -145,7 +283,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 _ => None,
             };
             let alloc = self.arena.alloc(var_type.unwrap());
-            var_type = Some(Type::Array { type_: alloc, size });
+            var_type = Some(Type::Array {
+                data_type: alloc,
+                size,
+            });
             self.next_tok();
         }
         self.next_tok();
@@ -170,7 +311,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
             is_volatile,
             is_const,
             data_storage_class,
-            type_: var_type?,
+            data_type: var_type?,
             val: expr,
         }))
     }
@@ -213,7 +354,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                         false
                     };
                     ret_type = Some(Type::Pointer {
-                        type_: type_ref,
+                        data_type: type_ref,
                         is_const,
                         is_restricted,
                     });
@@ -255,7 +396,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     should_inline,
                     data_storage_class,
                     args,
-                    ret_type: ret_type?,
+                    ret_data_type: ret_type?,
                     body: None,
                 }))
             }
@@ -267,7 +408,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     should_inline,
                     data_storage_class,
                     args,
-                    ret_type: ret_type?,
+                    ret_data_type: ret_type?,
                     body: self.parse_block(Token::RCurly),
                 }));
                 self.next_tok();
@@ -304,7 +445,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     _ => None,
                 };
                 let type_ = self.arena.alloc(field_type);
-                field_type = Type::Array { type_, size };
+                field_type = Type::Array {
+                    data_type: type_,
+                    size,
+                };
                 self.next_tok();
             }
             Field { name, field_type }
@@ -331,7 +475,10 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                     _ => None,
                 };
                 let alloc = self.arena.alloc(type_.unwrap());
-                type_ = Some(Type::Array { type_: alloc, size });
+                type_ = Some(Type::Array {
+                    data_type: alloc,
+                    size,
+                });
                 self.next_tok();
             }
             fields.push(Field {

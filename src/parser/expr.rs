@@ -111,9 +111,15 @@ impl<'a, 's: 'a> Parser<'a, 's> {
 
     fn parse_infix(&mut self, left_expr: Expression<'a>) -> Option<Expression<'a>> {
         match self.cur_tok()? {
-            Token::Equals | Token::Plus | Token::Minus | Token::Asterisk | Token::Divide => {
-                self.parse_infix_expr(left_expr)
-            }
+            Token::Equals
+            | Token::Plus
+            | Token::Minus
+            | Token::Asterisk
+            | Token::Divide
+            | Token::LessThan
+            | Token::GreaterThan
+            | Token::LTEquals
+            | Token::GTEquals => self.parse_infix_expr(left_expr),
             Token::LParent => Some(Expression::Call(self.parse_call_expr(left_expr)?)),
             // Token::LSquare => self.parse_index_expr(left),
             Token::Increment => Some(Expression::Post(PostExpr {

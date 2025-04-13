@@ -56,7 +56,7 @@ impl<'a, 's: 'a> Parser<'a, 's> {
                 },
                 Token::Asterisk => {
                     type_ = Type::Pointer {
-                        type_: self.arena.alloc(type_),
+                        data_type: self.arena.alloc(type_),
                         is_const: ptr_const,
                         is_restricted: ptr_restrict,
                     }

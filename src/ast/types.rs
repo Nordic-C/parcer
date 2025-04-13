@@ -6,13 +6,13 @@ pub enum Type<'ast> {
     Ident(Ident<'ast>),
     /// Pointer to a type
     Pointer {
-        type_: &'ast Type<'ast>,
+        data_type: &'ast Type<'ast>,
         is_const: bool,
         is_restricted: bool,
     },
     /// Array of a type
     Array {
-        type_: &'ast Type<'ast>,
+        data_type: &'ast Type<'ast>,
         size: Option<usize>,
     },
     /// Struct pointer

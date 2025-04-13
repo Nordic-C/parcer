@@ -8,6 +8,13 @@ macro_rules! expect_tok {
             true
         }
     }};
+    ($tok:expr,$pat:pat) => {{
+        if !matches!($tok, $pat) {
+            false
+        } else {
+            true
+        }
+    }}
 }
 
 #[macro_export]

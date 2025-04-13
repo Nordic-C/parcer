@@ -17,7 +17,6 @@ mod tests {
 
     #[test]
     fn test_parser() {
-        print!("Test");
         let file_content = fs::read_to_string(TESTS_PATH).unwrap();
         let lexer = Lexer::new(&file_content);
         let parse_arena = Bump::new();
